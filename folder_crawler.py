@@ -8,35 +8,35 @@ from tabulate import tabulate
 from structures import ItemType, SavedCrawls, Messages, FileOps
 from multiprocessing import Pool
 
+# region Constants
+NONE = np.nan
+
+# todo: navod jak pridat dalsi sloupec dat. Pridat nazev sloupce do COLUMN_NAMES a pridat do INITIAL_DATAFRAME dalsi
+#  pozici. Pote v process item vytvorit novou promenou a dat ji do returnu.
+COLUMN_NAMES = ["Path", "Changed", "Size readable", "Size bytes"]
+
+# TODO: tOHLE UDELAT JAKO PARAMETER DO PRINTU
+switched_column_names = ["Path", "Size bytes", "Size readable", "Changed"]
+
+INITIAL_DATAFRAME = {
+    COLUMN_NAMES[0]: [],
+    COLUMN_NAMES[1]: [],
+    COLUMN_NAMES[2]: [],
+    COLUMN_NAMES[3]: []
+}
+TABLE_HEADER = "keys"
+TABLE_FORMAT = "psql"
+
+
+# endregion
 
 class FolderCrawler:
     """
     The FolderCrawler class is used to crawl through a folder and its sub-folders and prints the paths with sizes.
     """
-    # region Constants
-
-    NONE = np.nan
-
-    # todo: navod jak pridat dalsi sloupec dat. Pridat nazev sloupce do COLUMN_NAMES a pridat do INITIAL_DATAFRAME dalsi
-    #  pozici. Pote v process item vytvorit novou promenou a dat ji do returnu.
-    COLUMN_NAMES = ["Path", "Changed", "Size readable", "Size bytes"]
-
-    # TODO: tOHLE UDELAT JAKO PARAMETER DO PRINTU
-    switched_column_names = ["Path", "Size bytes", "Size readable", "Changed"]
-
-    INITIAL_DATAFRAME = {
-        COLUMN_NAMES[0]: [],
-        COLUMN_NAMES[1]: [],
-        COLUMN_NAMES[2]: [],
-        COLUMN_NAMES[3]: []
-    }
-    TABLE_HEADER = "keys"
-    TABLE_FORMAT = "psql"
-
-    # endregion
 
     # region Constructor
-    def __init__(self, path: str, crawl_deep: bool):
+    def __init__(self, path: str, crawl_deep: bool, crawl: bool):
         """
         This is the constructor method for the FolderCrawler class.
 
@@ -46,39 +46,36 @@ class FolderCrawler:
         self.path = path
         self.crawl_deep = crawl_deep
         self.timer = time.perf_counter()  # start the timer
+        self.crawl = crawl
 
         # create a dataframe with column names, but no data
-        self.files = pd.DataFrame(self.INITIAL_DATAFRAME)
-        self.folders = pd.DataFrame(self.INITIAL_DATAFRAME)
-        self.skipped = pd.DataFrame(self.INITIAL_DATAFRAME)
+        self.files = pd.DataFrame(INITIAL_DATAFRAME)
+        self.folders = pd.DataFrame(INITIAL_DATAFRAME)
+        self.skipped = pd.DataFrame(INITIAL_DATAFRAME)
 
     # endregion
+    def main(self, print_folders=True, print_files=True, print_skipped_items=True):
+        self._initialize_files()
+        if self.crawl:
+            dataframe = self._crawl_items(self.path, self.crawl_deep)
+            self.folders = self._prepare_files_folders_dataframe(dataframe, is_folder=True)
+            self.files = self._prepare_files_folders_dataframe(dataframe, is_folder=False)
+            self.files, self.folders, self.skipped = self._prepare_skipped_items_dataframe(
+                files=self.files, folders=self.folders, columns=dataframe,column=COLUMN_NAMES[3])
+
+            print(self._get_current_time(), Messages.SAVING_RESULTS, ItemType.FILES.upper())
+            self._save_crawl_result(path=SavedCrawls.FILES, container=self.files)
+            print(self._get_current_time(), Messages.SAVING_RESULTS, ItemType.FOLDERS.upper())
+            self._save_crawl_result(path=SavedCrawls.FOLDERS, container=self.folders)
+            print(self._get_current_time(), Messages.SAVING_RESULTS, ItemType.SKIPPED.upper())
+            self._save_crawl_result(path=SavedCrawls.SKIPPED, container=self.skipped)
+
+        self.print_items(print_folders, print_files, print_skipped_items, filter_path="", filter_sign=">=", filter_size=0)
+
+        time_performance = self._get_time_performance(self.timer)
+        print("\n" + Messages.WHOLE_PROCES_TOOK, self._format_timestamp(time_performance))
 
     # region Public Methods
-    def crawl(self):
-        """
-        This method decides whether to perform a deep crawl or a shallow crawl based on the crawl_deep parameter.
-        This means that the crawler will either stay in inputted folder or go deeper into the sub-folders.
-        The result will be extracted either file of folder. Both of them will also contain its size.
-
-        :param crawl_deep: A boolean value that determines whether to perform a deep crawl or a shallow crawl. Default is False.
-
-        :return: None
-        """
-        self._initialize_files()
-
-        if self.crawl_deep:
-            self._crawl_items(go_deep=True)
-        else:
-            self._crawl_items(go_deep=False)
-
-        # todo: move this into main or somehow fuse it with other dataframe preparations
-        self._prepare_skipped_items_dataframe()
-
-        # todo: move this into main
-        self._save_crawl_result(path=SavedCrawls.FILES, container=self.files, item_type=ItemType.FILES)
-        self._save_crawl_result(path=SavedCrawls.FOLDERS, container=self.folders, item_type=ItemType.FOLDERS)
-        self._save_crawl_result(path=SavedCrawls.SKIPPED, container=self.skipped, item_type=ItemType.SKIPPED)
 
     def print_items(self, print_folders=True, print_files=True, print_skipped_items=True,
                     filter_path="", filter_sign=">=", filter_size=0):
@@ -102,16 +99,19 @@ class FolderCrawler:
 
         if print_files:
             self._read_out_saved_files(container=self.files, item_type=ItemType.FILES)
-            self._print_file_or_folder(self.files, filter_path, filter_size, item_type=ItemType.FILES, sign=filter_sign)
+            self._print_data(self.files, filter_path, filter_size, item_type=ItemType.FILES, sign=filter_sign)
         if print_folders:
             self._read_out_saved_files(container=self.folders, item_type=ItemType.FOLDERS)
-            self._print_file_or_folder(self.folders, filter_path, filter_size, item_type=ItemType.FOLDERS,
-                                       sign=filter_sign)
+            self._print_data(self.folders, filter_path, filter_size, item_type=ItemType.FOLDERS,
+                             sign=filter_sign)
         if print_skipped_items:
             self._read_out_saved_files(container=self.skipped, item_type=ItemType.SKIPPED)
-            self._print_skipped_items(self.skipped)
+            self._print_data(self.skipped, filter_path, filter_size, item_type=ItemType.SKIPPED,
+                             sign=filter_sign)
 
-        self._show_programs_time_performance()
+    # endregion
+
+    # region implement later
 
     def read_content_of_file(self, path: str, filter_: str = "", print_=True):
         """
@@ -150,26 +150,47 @@ class FolderCrawler:
 
     # region Private Methods
 
-    # todo: get rid of the print inside of this method?
-    def _prepare_skipped_items_dataframe(self) -> None:
+    @staticmethod
+    def _prepare_skipped_items_dataframe(files: pd.DataFrame, folders: pd.DataFrame,
+                                         columns: pd.DataFrame, column: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """
         This method is used to prepare the skipped items dataframe out of the files and folders dataframes.
         """
-        nan_files = pd.DataFrame(self.INITIAL_DATAFRAME)
-        nan_folders = pd.DataFrame(self.INITIAL_DATAFRAME)
+        nan_files = pd.DataFrame(INITIAL_DATAFRAME)
+        nan_folders = pd.DataFrame(INITIAL_DATAFRAME)
 
-        if not self.files.empty:
-            nan_files = self.files[self.files[self.COLUMN_NAMES[3]].isna()]
-            self.files = self.files[~self.files[self.COLUMN_NAMES[3]].isna()].copy()
+        if not files.empty:
+            nan_files = files[files[column].isna()]
+            files = files[~files[column].isna()].copy()
 
-        if not self.folders.empty:
-            nan_folders = self.folders[self.folders[self.COLUMN_NAMES[3]].isna()]
-            self.folders = self.folders[~self.folders[self.COLUMN_NAMES[3]].isna()].copy()
+        if not folders.empty:
+            nan_folders = folders[folders[column].isna()]
+            folders = folders[~folders[column].isna()].copy()
 
-        self.skipped = pd.concat([nan_files, nan_folders], ignore_index=True)
-        print(self._get_current_time(), Messages.DATAFRAME_PREPARATION_DONE, ItemType.SKIPPED.upper())
+        skipped_items = pd.concat([nan_files, nan_folders], ignore_index=True)
+        return files, folders, skipped_items
 
-    def _process_item_for_multiprocessing_pool(self, path_tuple) -> [tuple, bool]:
+        # print(self._get_current_time(), Messages.DATAFRAME_PREPARATION_DONE, ItemType.SKIPPED.upper())
+
+    @staticmethod
+    def _prepare_files_folders_dataframe(dataframe: pd.DataFrame, is_folder: bool):
+        column_with_bools = dataframe[1]
+        filter_ = column_with_bools == is_folder
+        items = dataframe[filter_].copy()
+        items = items.drop(columns=1)
+        unpacked = items[0].apply(pd.Series)
+        unpacked.columns = COLUMN_NAMES
+        return pd.DataFrame(unpacked)
+
+            # if is_folder:
+            #     self.folders = pd.DataFrame(unpacked)
+            #     print(self._get_current_time(), Messages.DATAFRAME_PREPARATION_DONE, ItemType.FOLDERS.upper())
+            # else:
+            #     # is file
+            #     self.files = pd.DataFrame(unpacked)
+            #     print(self._get_current_time(), Messages.DATAFRAME_PREPARATION_DONE, ItemType.FILES.upper())
+
+    def _process_item_for_multiprocessing_pool(self, path_tuple: tuple[str, bool]) -> [tuple, bool]:
         """
         This method is used to process the items in the multiprocessing pool.
 
@@ -179,10 +200,11 @@ class FolderCrawler:
         is_folder = not is_file
         item_path = os.path.join(self.path, path) if self.path not in path else path
         last_change = self._get_last_change_of_item(item_path)
-        size = self._get_size(item_path, get_size_folder=is_folder)
+        size = self._get_size_of_item(item_path, get_size_folder=is_folder)
         size_readable, size_total = self._resolve_sizes(size)
+        data_complete = (item_path, last_change, size_readable, size_total)
 
-        return self._arguments(item_path, last_change, size_readable, size_total), is_folder
+        return data_complete, is_folder
 
     def _resolve_sizes(self, size: int | float) -> tuple[str, str] | tuple[float, float]:
         """
@@ -191,23 +213,26 @@ class FolderCrawler:
 
         :param size: Data to be resolved.
         """
-        if size is not self.NONE:
+        if size is not NONE:
             size_readable, size_total = self._convert_bytes_to_readable_format(size)
         else:
-            size_readable, size_total = self.NONE, self.NONE
+            size_readable, size_total = NONE, NONE
         return size_readable, size_total
 
-    def _crawl_items(self, go_deep=False):
+    def _crawl_items(self, path: str, go_deep: bool):
         """
         Crawls through the folder at the given path, with the option to go deeper into subdirectories,
         using multiprocessing to calculate the sizes of files and folders.
+
+        :param path: The path of the folder that needs to be crawled.
+        :param go_deep: A boolean value that determines whether to go deep into subdirectories or not.
         """
         if go_deep:
             print(self._get_current_time(), Messages.DEEP_CRAWL)
-            paths = self._crawl_deep()
+            paths = self._crawl_deep(path)
         else:
             print(self._get_current_time(), Messages.SHALLOW_CRAWL)
-            paths = self._crawl_shallow()
+            paths = self._crawl_shallow(path)
 
         # Use multiprocessing Pool to handle item processing
         print(self._get_current_time(), Messages.STARTING_MULTI_PROCESSING)
@@ -217,42 +242,83 @@ class FolderCrawler:
             results = pool.map(self._process_item_for_multiprocessing_pool, paths)
 
         print(self._get_current_time(), Messages.DATAFRAME_PREPARATION)
-        dataframe = pd.DataFrame(results)
+        return pd.DataFrame(results)
 
-        # todo: perhpas create a method for this
-        for is_folder in [False, True]:
-            items = dataframe[dataframe[1] == is_folder].copy()
-            items = items.drop(columns=1)
-            unpacked = items[0].apply(pd.Series)
-            unpacked.columns = self.COLUMN_NAMES
-            if is_folder:
-                self.folders = pd.DataFrame(unpacked)
-                print(self._get_current_time(), Messages.DATAFRAME_PREPARATION_DONE, ItemType.FOLDERS.upper())
-            else:
-                # is file
-                self.files = pd.DataFrame(unpacked)
-                print(self._get_current_time(), Messages.DATAFRAME_PREPARATION_DONE, ItemType.FILES.upper())
+    def _read_out_saved_files(self, container: pd.DataFrame, item_type: str) -> None:
+        """
+        This will read out saved files if no crawling was done in current run of a program.
+
+        :param container: Dataframe that is going to be checked if it is empty.
+        :param item_type: A string value that determines which file to read out.
+        """
+        if container.empty:
+            item_path = os.path.join(SavedCrawls.SAVED_CRAWLS_FOLDER, f"{item_type}{SavedCrawls.EXTENSION}")
+
+            if item_type is ItemType.FILES:
+                self.files = pd.read_csv(item_path)
+            elif item_type is ItemType.FOLDERS:
+                self.folders = pd.read_csv(item_path)
+            elif item_type is ItemType.SKIPPED:
+                self.skipped = pd.read_csv(item_path)
+
+    def _get_crawl_summary(self, size_long: int, print_total_size: bool) -> tuple:
+        """
+        This method is used to print the summary of the crawled data.
+
+        :param size_long: Raw size of the crawled data in bytes.
+        :param print_total_size: This will filter out dataframe which has recursive paths.
+        :return:
+        """
+        if print_total_size:
+            size_short, size_long = self._convert_bytes_to_readable_format(size_long)
+            return Messages.NR_OF_CRAWLED_DATA, size_short, size_long, "\n\n"
+        else:
+            return "\n",
+
+    # todo: implement filtering
+    def _print_data(self, container: pd.DataFrame, filter_path: str, filter_size: int, item_type: str,
+                    sign: str = ">=", filter_date=None):
+        if container.empty:
+            return
+
+        print_total_size = not (self.crawl_deep and item_type == ItemType.FOLDERS)
+
+        if item_type == ItemType.SKIPPED:
+            container = self._filter_subdirectories(container=container, column=COLUMN_NAMES[0])
+
+        # self._print_in_tabular_format(container[self.switched_column_names])
+        print(self._tabulate_data(container))
+
+        if not item_type == ItemType.SKIPPED:
+            split = container[COLUMN_NAMES[3]].str.split(" ").str[1]
+            sum_of_bytes = split.astype(np.int64).sum()
+            print(*self._get_crawl_summary(sum_of_bytes, print_total_size))
 
 
 
-    def _crawl_shallow(self) -> list[tuple[str, bool]]:
+    # endregion
+
+    # region Static Methods
+    @staticmethod
+    def _crawl_shallow(path: str) -> list[tuple[str, bool]]:
         """
         Crawls through the folder at the given path without going into subfolders.
         """
         result = []
-        items = os.listdir(self.path)
+        items = os.listdir(path)
         for item in items:
-            item_path = os.path.join(self.path, item)
+            item_path = os.path.join(path, item)
             is_folder = os.path.isdir(item_path)
             result.append((item_path, not is_folder))
         return result
 
-    def _crawl_deep(self) -> list[tuple[str, bool]]:
+    @staticmethod
+    def _crawl_deep(path: str) -> list[tuple[str, bool]]:
         """
         Crawls through the folder at the given path and its subfolders.
         """
         result = []
-        for root, folders, files in os.walk(self.path):
+        for root, folders, files in os.walk(path):
             for file in files:
                 file_path = os.path.join(root, file)
                 result.append((file_path, True))
@@ -261,21 +327,20 @@ class FolderCrawler:
                 result.append((folder_path, False))
         return result
 
-    # todo: think about how to resolve prints
-    def _save_crawl_result(self, path: str, container: pd.DataFrame, item_type: str) -> None:
+    @staticmethod
+    def _save_crawl_result(path: str, container: pd.DataFrame) -> None:
         """
         This method is used to save the crawled dataframe into a csv file.
         :param path: The path of the file where the dataframe needs to be saved.
         :param container: Dataframe that needs to be saved.
-        :param item_type: Item type to resolve print message.
         """
-        print(self._get_current_time(), Messages.SAVING_RESULTS, item_type.upper())
+
         if os.path.exists(path):
             os.remove(path)
         container.to_csv(path, index=False)
-        print(self._get_current_time(), Messages.SAVING_RESULTS_DONE, item_type.upper())
 
-    def _get_size(self, path: str, get_size_folder: bool) -> int | float:
+    @staticmethod
+    def _get_size_of_item(path: str, get_size_folder: bool) -> int | float:
         """
         Calculate the size of a file or a folder. If get_size_folder is True, it calculates
         the size of the folder at the given path by summing the sizes of all files in the
@@ -296,102 +361,37 @@ class FolderCrawler:
                 # get size of file
                 size_bytes = os.path.getsize(path)
         except FileNotFoundError:
-            return self.NONE
+            return NONE
         return size_bytes
 
-    def _read_out_saved_files(self, container: pd.DataFrame, item_type: str) -> None:
+    @staticmethod
+    def _tabulate_data(container: pd.DataFrame) -> str:
         """
-        This will read out saved files if no crawling was done in current run of a program.
-
-        :param container: Dataframe that is going to be checked if it is empty.
-        :param item_type: A string value that determines which file to read out.
-        """
-        if container.empty:
-            item_path = os.path.join(SavedCrawls.SAVED_CRAWLS_FOLDER, f"{item_type}{SavedCrawls.EXTENSION}")
-
-            if item_type is ItemType.FILES:
-                self.files = pd.read_csv(item_path)
-            elif item_type is ItemType.FOLDERS:
-                self.folders = pd.read_csv(item_path)
-            elif item_type is ItemType.SKIPPED:
-                self.skipped = pd.read_csv(item_path)
-
-    def _print_crawl_summary(self, size_long: int, print_total_size: bool) -> None:
-        """
-        This method is used to print the summary of the crawled data.
-
-        :param size_long: Raw size of the crawled data in bytes.
-        :param print_total_size: This will filter out dataframe which has recursive paths.
-        :return:
-        """
-        if print_total_size:
-            size_short, size_long = self._convert_bytes_to_readable_format(size_long)
-            print(Messages.NR_OF_CRAWLED_DATA, size_short, size_long, end="\n\n")
-        else:
-            print("\n")
-
-    def _print_skipped_items(self, container: pd.DataFrame) -> None:
-        """
-        This method is used to print the skipped items in a tabular format.
-
-        :param container: Dataframe that is going to be printed in a pretty tabular format.
-        """
-        if container.empty:
-            return
-        container = self._filter_subdirectories(container=container)
-        self._print_in_tabular_format(container)
-
-    # todo: implement filtering
-    def _print_file_or_folder(self, container: pd.DataFrame, filter_path: str, filter_size: int, item_type: str,
-                              sign: str = ">=", filter_date=None):
-        if container.empty:
-            return
-
-        print_total_size = not (self.crawl_deep and item_type == ItemType.FOLDERS)
-
-        # In the column Size bytes, split the string and get the second element which is the size in bytes. The
-        # positions before and after are the color formatting.
-        split = container[self.COLUMN_NAMES[3]].str.split(" ").str[1]
-        sum_of_bytes = split.astype(np.int64).sum()
-        # self._print_in_tabular_format(container[self.switched_column_names])
-        self._print_in_tabular_format(container)
-        self._print_crawl_summary(sum_of_bytes, print_total_size)
-
-    def _print_in_tabular_format(self, container: pd.DataFrame) -> None:
-        """
-        This method is used to print the files and folders in a tabular format.
+        This method is used to return the pandas container in a tabular format.
         :param container: Dataframe that is going to be printed in a pretty tabular format.
         """
 
-        print(tabulate(container, headers=self.TABLE_HEADER, tablefmt=self.TABLE_FORMAT))
+        return tabulate(container, headers=TABLE_HEADER, tablefmt=TABLE_FORMAT)
 
-    def _show_programs_time_performance(self) -> None:
-        """
-        This method is used to calculate the time since initialization
-        of class till the call of this method.
-        """
-        resulting_time = self._format_duration(time.perf_counter() - self.timer)
-        print("\n" + Messages.WHOLE_PROCES_TOOK, resulting_time)
-
-    def _get_last_change_of_item(self, path: str) -> datetime.datetime | float:
+    @staticmethod
+    def _get_last_change_of_item(path: str) -> datetime.datetime | float:
         """
         This private method is used to get the last change of a file.
 
         :param path: The path of the file whose last change needs to be calculated.
-        :return: The last change of the file as a datetime object.
         """
         try:
             return datetime.datetime.fromtimestamp(os.path.getmtime(path))
         except FileNotFoundError:
-            return self.NONE
+            return NONE
 
-    def _filter_subdirectories(self, container: pd.DataFrame) -> pd.DataFrame:
+    @staticmethod
+    def _filter_subdirectories(container: pd.DataFrame, column: str) -> pd.DataFrame:
         """
         This method filters a given row if a path at that row is contained
-        as a substring in any other path in the dataframe. The relevant column
-        is called "Path".
+        as a substring in any other path in the dataframe.
 
-        Example:
+        Example when we want to filter entries in column "Path":
         index, Path, Column2, Column3, ...
         0, C:/Users, X, X, ...                      <- This row will be filtered.
         1, C:/Users/Subfolder, X, X, ...            <- This row will be filtered.
@@ -402,10 +402,10 @@ class FolderCrawler:
         """
 
         # Sort dataframe by paths column to ensure that shorter paths come before their potential subdirectories
-        container = container.sort_values(by=self.COLUMN_NAMES[0], ascending=True)
+        container = container.sort_values(by=column, ascending=True)
 
         # get only the paths from the dataframe as a list
-        paths = container[self.COLUMN_NAMES[0]].tolist().copy()
+        paths = container[column].tolist().copy()
 
         # Remove paths that are subdirectories of other paths
         for i, path in enumerate(paths):
@@ -414,13 +414,20 @@ class FolderCrawler:
             for path_following in paths[i + 1:]:
                 if path in path_following:
                     # Drop complete row in original dataframe
-                    container.drop(container[container[self.COLUMN_NAMES[0]] == path].index, inplace=True)
+                    filter_ = container[column] == path
+                    index = container[filter_].index
+                    container.drop(index, inplace=True)
 
         return container
 
-    # endregion
+    @staticmethod
+    def _get_time_performance(timer_start) -> float:
+        """
+        This method is used to calculate the difference between the start and end time.
+        """
+        timer_end = time.perf_counter()
+        return timer_end - timer_start
 
-    # region Static Methods
     @staticmethod
     def _get_current_time() -> datetime.datetime:
         """
@@ -462,7 +469,7 @@ class FolderCrawler:
             size_adjusted /= 1024
 
     @staticmethod
-    def _format_duration(seconds: float) -> str:
+    def _format_timestamp(seconds: float) -> str:
         """
         This method is used to format the duration in seconds to a more readable format.
 
@@ -487,16 +494,6 @@ class FolderCrawler:
         return years + days + hours + minutes + seconds
 
     @staticmethod
-    def _arguments(*args) -> tuple:
-        """
-        This method is used to return the parameters passed to it.
-        This helps us to pass and get back dynamic number of parameters.
-
-        :param args: The unlimited number of parameters that need to be returned.
-        """
-        return args
-
-    @staticmethod
     def _initialize_files() -> None:
         """
         Ensure all necessary directories and files are created.
@@ -513,7 +510,6 @@ class FolderCrawler:
     # todo: create a readout option with filter across multiple files
     # todo: check that private methods do each only one thing. Isolate as much outside elements as possible.
     # todo: create a main method
-    # todo: create a new repo for this project
 
 
 ########################################################################################################################
@@ -541,7 +537,6 @@ class FolderCrawler:
 # 4.57 GHz 8Core utilised therefore at 100% will crawl and save all paths from 715GB in 3 minutes.
 ########################################################################################################################
 if __name__ == '__main__':
-    # cr = FolderCrawler(path=r"C:\Users\lazni\Downloads", crawl_deep=False)
-    cr = FolderCrawler(path=r"C:\\", crawl_deep=False)
-    cr.crawl()
-    cr.print_items(True, True, True, filter_path="", filter_sign=">=", filter_size=0)
+    cr = FolderCrawler(path=r"C:\\Users\lazni\Downloads", crawl_deep=False, crawl=True)
+    # cr = FolderCrawler(path=r"C:\\", crawl_deep=True, crawl=True)
+    cr.main(print_files=True, print_folders=True, print_skipped_items=True)
