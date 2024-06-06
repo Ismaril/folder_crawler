@@ -7,6 +7,7 @@ import numpy as np
 from tabulate import tabulate
 from structures import ItemType, SavedCrawls, Messages, FileOps
 from multiprocessing import Pool
+from colorama import init, Fore, Back, Style
 
 # region Constants
 NONE = np.nan
@@ -51,7 +52,13 @@ class FolderCrawler:
         self.folders = pd.DataFrame(INITIAL_DATAFRAME)
         self.skipped = pd.DataFrame(INITIAL_DATAFRAME)
 
+        # Initialize colorama
+        init(autoreset=True)
+        print(Fore.WHITE, Back.BLACK, Style.RESET_ALL)
+
     # endregion
+
+    # todo: refactor
     def main(self, print_folders=True, print_files=True, print_skipped_items=True,
              crawl=True, crawl_deep=True):
         self._initialize_files()
@@ -86,8 +93,6 @@ class FolderCrawler:
         time_performance = self._get_time_performance(self.timer)
         print("\n" + Messages.WHOLE_PROCES_TOOK, self._format_timestamp(time_performance))
 
-    # region Public Methods
-
     def print_items(self, print_folders=True, print_files=True, print_skipped_items=True,
                     filter_path="", filter_sign=">=", filter_size=0, crawl_deep=True):
         """
@@ -117,8 +122,6 @@ class FolderCrawler:
         if print_skipped_items:
             self._print_data(self.skipped, filter_path, filter_size,
                              item_type=ItemType.SKIPPED, sign=filter_sign, crawl_deep=crawl_deep)
-
-    # endregion
 
     # region implement later
 
@@ -156,8 +159,6 @@ class FolderCrawler:
         return array_difference
 
     # endregion
-
-    # region Private Methods
 
     def _process_item_for_multiprocessing_pool(self, path_tuple: tuple[str, bool]) -> [tuple, bool]:
         """
@@ -213,7 +214,7 @@ class FolderCrawler:
         print(self._get_current_time(), Messages.DATAFRAME_PREPARATION)
         return pd.DataFrame(results)
 
-    # todo: implement filtering
+    # todo: implement filtering, refactor
     def _print_data(self, container: pd.DataFrame, filter_path: str, filter_size: int, item_type: str,
                     sign: str = ">=", filter_date=None, crawl_deep=True):
         if container.empty:
@@ -232,8 +233,6 @@ class FolderCrawler:
             sum_of_bytes = split.astype(np.int64).sum()
             size_short, size_long = self._convert_bytes_to_readable_format(sum_of_bytes)
             print(*self._get_crawl_summary(print_total_size, size_short, size_long))
-
-    # endregion
 
     # region Static Methods
     @staticmethod
@@ -264,8 +263,7 @@ class FolderCrawler:
             return "\n",
 
     @staticmethod
-    def _filter_data(files: pd.DataFrame, folders: pd.DataFrame,
-                     empty_dataframe: dict, column: str) -> tuple[
+    def _filter_data(files: pd.DataFrame, folders: pd.DataFrame, empty_dataframe: dict, column: str) -> tuple[
         pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """
         This method is used to prepare the skipped items dataframe out of the files and folders dataframes.
@@ -379,7 +377,7 @@ class FolderCrawler:
         """
         try:
             return datetime.datetime.fromtimestamp(os.path.getmtime(path))
-        except FileNotFoundError:
+        except Exception:
             return NONE
 
     @staticmethod
@@ -455,13 +453,14 @@ class FolderCrawler:
         """
 
         size_adjusted = size
-        COLORS = (31, 33, 32, 34, 36)
+        COLORS = [Fore.RED, Fore.YELLOW, Fore.GREEN, Fore.BLUE, Fore.CYAN]
         UNITS = ["B", "KB", "MB", "GB", "TB"]
 
         for color, unit in zip(COLORS, UNITS):
             if size_adjusted < 1024:
-                size_short = f"\033[0;{color};10m{size_adjusted:.2f}{unit}\033[0m"
-                size_long = f"\033[0;{color};10m {size} \033[0m"
+                size_short = f"{color}{size_adjusted:.2f}{unit}{Style.RESET_ALL}"
+                size_long = f"{color} {size} {Style.RESET_ALL}"
+
                 return size_short, size_long
             size_adjusted /= 1024
 
@@ -509,40 +508,9 @@ class FolderCrawler:
             open(txt_file, FileOps.APPEND_MODE, encoding=FileOps.ENCODING).close()
     # endregion
 
-    # todo: check all the tests, they were written by AI
     # todo: check documentation
-    # todo: create a interface executable from the command line
     # todo: create a readout option with filter across multiple files
     # todo: check that private methods do each only one thing. Isolate as much outside elements as possible.
 
 
-########################################################################################################################
-# HOW TO CRAWL AND PRINT ITEMS:
-# Start with specifying the path of the folder you want to crawl in ctor. Then chose if you want to crawl deep or not.
-# Call method crawl.
-# Call method print_items with parameters you want to print. You can also filter the output.
-# In case you performed time-consuming crawl already, comment out the crawl method and just call print_items method.
-#   The previous crawl will be instantly read out from the saved txt files.
 
-
-# HOW TO READ OUT SAVED FILES:
-# Call method read_content_of_file with the path of the file you want to read out.
-
-
-# HOW TO COMPARE SAVED CRAWLS:
-# Perform a crawl in a first desired folder and then rename the output txt file in saved_crawls folder.
-# Perform a crawl in a second desired folder.
-# Call method compare_saved_crawls with the paths of the two files you want to compare.
-# The method will return the difference between the two files.
-
-
-# PERFORMANCE:
-# For you info, you can also crawl complete disk. With multiprocessing implemented in this code, it will be quite fast.
-# 4.57 GHz 8Core utilised therefore at 100% will crawl and save all paths from 715GB in 3 minutes.
-########################################################################################################################
-if __name__ == '__main__':
-    cr = FolderCrawler(path=r"C:\\Users\lazni\Downloads")
-    # cr = FolderCrawler(path=r"C:\\", crawl_deep=True, crawl=True)
-    common = True
-    cr.main(print_files=common, print_folders=common, print_skipped_items=common,
-            crawl=True, crawl_deep=False)
