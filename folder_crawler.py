@@ -12,8 +12,6 @@ from colorama import init, Fore, Back, Style
 # region Constants
 NONE = np.nan
 
-# todo: navod jak pridat dalsi sloupec dat. Pridat nazev sloupce do COLUMN_NAMES a pridat do INITIAL_DATAFRAME dalsi
-#  pozici. Pote v process item vytvorit novou promenou a dat ji do returnu.
 COLUMN_NAMES = ["Path", "Changed", "Size readable", "Size bytes"]
 
 # TODO: tOHLE UDELAT JAKO PARAMETER DO PRINTU
@@ -60,7 +58,12 @@ class FolderCrawler:
 
     # todo: refactor
     def main(self, print_folders=True, print_files=True, print_skipped_items=True,
-             crawl=True, crawl_deep=True):
+             crawl=True, crawl_deep=True, filter_path="", filter_size=0, filter_size_sign=">=",
+             filter_date=datetime.datetime.min, filter_date_sign=">="):
+        """
+        This method is used to run the main functionality of the FolderCrawler class.
+        """
+
         self._initialize_files()
         if crawl:
             # CRAWL
@@ -86,42 +89,54 @@ class FolderCrawler:
         self.skipped = self.load_crawled_data(container=self.skipped, item_type=ItemType.SKIPPED)
 
         # PRINT DATAFRAMES
-        self.print_items(print_folders, print_files, print_skipped_items, filter_path="", filter_sign=">=",
-                         filter_size=0, crawl_deep=crawl_deep)
+        self.print_items(print_folders=print_folders, print_files=print_files, print_skipped_items=print_skipped_items,
+                         filter_path=filter_path, filter_size=filter_size,
+                         filter_size_sign=filter_size_sign, filter_date=filter_date,
+                         filter_date_sign=filter_date_sign,
+                         crawl_deep=crawl_deep)
 
         # PRINT TIME PERFORMANCE
         time_performance = self._get_time_performance(self.timer)
         print("\n" + Messages.WHOLE_PROCES_TOOK, self._format_timestamp(time_performance))
 
-    def print_items(self, print_folders=True, print_files=True, print_skipped_items=True,
-                    filter_path="", filter_sign=">=", filter_size=0, crawl_deep=True):
+    def print_items(self, print_folders: bool, print_files: bool, print_skipped_items: bool,
+                    filter_path: str, filter_size: int, filter_size_sign: str,
+                    filter_date: datetime.datetime, filter_date_sign: str, crawl_deep=True):
         """
         This method is used to print the files and folders that were found during the crawling process.
-        It also prints the number of files and folders that were listed.
-        The method can be customized to print only files, only folders, or both.
-        It can also filter the files and folders based on text and size.
-        At the end of the method, it calls the _show_time method to print the time taken for the crawling process.
 
-        :param print_folders: A boolean value that determines whether to print the folders or not. Default is True.
-        :param print_files: A boolean value that determines whether to print the files or not. Default is True.
-        :param filter_path: A string value that is used to filter the files and folders. Default is an empty string.
-        :param filter_sign: A string value that is used to compare the sizes of the files and folders. Default is ">=".
-        :param filter_size: An integer value that is used to filter the files and folders based on their sizes. Default is 0.
-        :param print_sizes: A boolean value that determines whether to work with sizes or not. Default is False.
-        :param read_out_saved_files: A boolean value that determines whether to read out the saved files and folders from the txt files. Default is False.
-
-        :returns: None
+        :param print_folders: A boolean value that determines whether to print the folders or not.
+        :param print_files: A boolean value that determines whether to print the files or not.
+        :param print_skipped_items: A boolean value that determines whether to print the skipped items or not.
+        :param filter_path: A string value that is used to filter the files and folders.
+        :param filter_size: An integer value that is used to filter the files and folders based on their sizes.
+        :param filter_size_sign: A string value that is used to compare the sizes of the files and folders.
+        :param filter_date: A datetime value that is used to filter the files and folders based on their last change date.
+        :param filter_date_sign: A string value that is used to compare the last change dates of the files and folders.
+        :param crawl_deep: A boolean value that determines whether to go deep into subdirectories or not.
         """
 
         if print_files:
-            self._print_data(self.files, filter_path, filter_size,
-                             item_type=ItemType.FILES, sign=filter_sign, crawl_deep=crawl_deep)
+            self._print_data(container=self.files,
+                             filter_path=filter_path,
+                             filter_size=filter_size, filter_size_sign=filter_size_sign,
+                             filter_date=filter_date, filter_date_sign=filter_date_sign,
+                             item_type=ItemType.FILES,
+                             crawl_deep=crawl_deep)
         if print_folders:
-            self._print_data(self.folders, filter_path, filter_size,
-                             item_type=ItemType.FOLDERS, sign=filter_sign, crawl_deep=crawl_deep)
+            self._print_data(container=self.folders,
+                             filter_path=filter_path,
+                             filter_size=filter_size, filter_size_sign=filter_size_sign,
+                             filter_date=filter_date, filter_date_sign=filter_date_sign,
+                             item_type=ItemType.FOLDERS,
+                             crawl_deep=crawl_deep)
         if print_skipped_items:
-            self._print_data(self.skipped, filter_path, filter_size,
-                             item_type=ItemType.SKIPPED, sign=filter_sign, crawl_deep=crawl_deep)
+            self._print_data(container=self.skipped,
+                             filter_path=filter_path,
+                             filter_size=filter_size, filter_size_sign=filter_size_sign,
+                             filter_date=filter_date, filter_date_sign=filter_date_sign,
+                             item_type=ItemType.SKIPPED,
+                             crawl_deep=crawl_deep)
 
     # region implement later
 
@@ -160,14 +175,14 @@ class FolderCrawler:
 
     # endregion
 
-    def _process_item_for_multiprocessing_pool(self, path_tuple: tuple[str, bool]) -> [tuple, bool]:
+    def _get_path_with_properties(self, path_tuple: tuple[str, bool]) -> [tuple, bool]:
         """
         This method is used to process the items in the multiprocessing pool.
 
-        :param path_tuple: Tuple containing path and boolean which determines if the path is a file or a folder.
+        :param path_tuple: Tuple containing path+it's properties and boolean which determines if the path is a file or
+        a folder.
         """
-        path, is_file = path_tuple
-        is_folder = not is_file
+        path, is_folder = path_tuple
         item_path = os.path.join(self.path, path) if self.path not in path else path
         last_change = self._get_last_change_of_item(item_path)
         size = self._get_size_of_item(item_path, get_size_folder=is_folder)
@@ -207,16 +222,20 @@ class FolderCrawler:
         # Use multiprocessing Pool to handle item processing
         print(self._get_current_time(), Messages.STARTING_MULTI_PROCESSING)
 
-        # todo: check what is returned from the pool
+        # How this works:
+        # Into the pool.map method we pass the method which performs the operations and as a second parameter items to
+        # pass into function at first parameter.
+        # The pool then distributes the items to the available cores and processes them in parallel.
+        # Result will be just as if you normally put the items into the function.
         with Pool() as pool:
-            results = pool.map(self._process_item_for_multiprocessing_pool, paths)
+            results = pool.map(self._get_path_with_properties, paths)
 
         print(self._get_current_time(), Messages.DATAFRAME_PREPARATION)
         return pd.DataFrame(results)
 
     # todo: implement filtering, refactor
-    def _print_data(self, container: pd.DataFrame, filter_path: str, filter_size: int, item_type: str,
-                    sign: str = ">=", filter_date=None, crawl_deep=True):
+    def _print_data(self, container: pd.DataFrame, filter_path: str, filter_size: int, filter_size_sign: str,
+                    filter_date: datetime.datetime, filter_date_sign: str, item_type: str, crawl_deep=True):
         if container.empty:
             return
 
@@ -225,9 +244,17 @@ class FolderCrawler:
         if item_type == ItemType.SKIPPED:
             container = self._filter_subdirectories(container=container, column=COLUMN_NAMES[0])
 
-        # self._print_in_tabular_format(container[self.switched_column_names])
+        container = self._filter_paths(container=container, filter_path=filter_path)
+
+        if item_type in (ItemType.FILES, ItemType.FOLDERS):
+            container = self._filter_sizes(container=container, filter_size=filter_size, sign=filter_size_sign)
+            container = self._filter_last_change(container=container, filter_date=filter_date, sign=filter_date_sign)
+
+        # self._tabulate_data(container[switched_column_names])
+        print(item_type.upper())
         print(self._tabulate_data(container))
 
+        # Print the summary of the crawled data
         if not item_type == ItemType.SKIPPED:
             split = container[COLUMN_NAMES[3]].str.split(" ").str[1]
             sum_of_bytes = split.astype(np.int64).sum()
@@ -235,6 +262,53 @@ class FolderCrawler:
             print(*self._get_crawl_summary(print_total_size, size_short, size_long))
 
     # region Static Methods
+    @staticmethod
+    def _filter_paths(container: pd.DataFrame, filter_path: str):
+        """
+        This method is used to filter the paths in the dataframe based on the filter path.
+
+        :param container: The dataframe that needs to be filtered.
+        :param filter_path: The path that is used to filter the dataframe.
+        """
+
+        filter_ = container[COLUMN_NAMES[0]].str.contains(filter_path)
+        return container[filter_]
+
+    @staticmethod
+    def _filter_sizes(container: pd.DataFrame, filter_size: int, sign: str):
+        """
+        This method is used to filter the paths in the dataframe based on the filter size.
+
+        :param container: The dataframe that needs to be filtered.
+        :param filter_size: The size that is used to filter the dataframe.
+        :param sign: The sign that is used to compare the sizes.
+        """
+
+        if sign == ">=":
+            filter_ = container[COLUMN_NAMES[3]].str.split(" ").str[1].astype(np.int64) >= filter_size
+        elif sign == "<=":
+            filter_ = container[COLUMN_NAMES[3]].str.split(" ").str[1].astype(np.int64) <= filter_size
+
+        return container[filter_]
+
+
+    @staticmethod
+    def _filter_last_change(container: pd.DataFrame, filter_date: datetime.datetime, sign: str):
+        """
+        This method is used to filter the paths in the dataframe based on the filter date.
+
+        :param container: The dataframe that needs to be filtered.
+        :param filter_date: The date that is used to filter the dataframe.
+        :param sign: The sign that is used to compare the dates.
+        """
+
+        if sign == ">=":
+            filter_ = container[COLUMN_NAMES[1]] >= filter_date
+        elif sign == "<=":
+            filter_ = container[COLUMN_NAMES[1]] <= filter_date
+
+        return container[filter_]
+
     @staticmethod
     def load_crawled_data(container: pd.DataFrame, item_type: str) -> pd.DataFrame:
         """
@@ -292,7 +366,7 @@ class FolderCrawler:
         items = items.drop(columns=1)
         unpacked = items[0].apply(pd.Series)
         unpacked.columns = COLUMN_NAMES
-        return pd.DataFrame(unpacked)
+        return pd.DataFrame(unpacked).reset_index(drop=True)
 
     @staticmethod
     def _crawl_shallow(path: str) -> list[tuple[str, bool]]:
@@ -304,7 +378,7 @@ class FolderCrawler:
         for item in items:
             item_path = os.path.join(path, item)
             is_folder = os.path.isdir(item_path)
-            result.append((item_path, not is_folder))
+            result.append((item_path, is_folder))
         return result
 
     @staticmethod
@@ -316,10 +390,10 @@ class FolderCrawler:
         for root, folders, files in os.walk(path):
             for file in files:
                 file_path = os.path.join(root, file)
-                result.append((file_path, True))
+                result.append((file_path, False))
             for folder in folders:
                 folder_path = os.path.join(root, folder)
-                result.append((folder_path, False))
+                result.append((folder_path, True))
         return result
 
     @staticmethod
@@ -507,10 +581,3 @@ class FolderCrawler:
             # Create empty txt files if they don't exist or just append empty string if they do exist
             open(txt_file, FileOps.APPEND_MODE, encoding=FileOps.ENCODING).close()
     # endregion
-
-    # todo: check documentation
-    # todo: create a readout option with filter across multiple files
-    # todo: check that private methods do each only one thing. Isolate as much outside elements as possible.
-
-
-
