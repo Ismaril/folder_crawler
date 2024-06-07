@@ -6,8 +6,155 @@ import pandas as pd
 
 from tabulate import tabulate
 from structures import SavedCrawls
-from folder_crawler import FolderCrawler, NONE
+from folder_crawler import FolderCrawler, NONE, COLUMN_NAMES
 from unittest.mock import patch, mock_open
+
+
+# TODO: The tests were wirtten by AI by large. There are a lot of hardcoded strings. To
+#  make it more modular and change-proof, use existing constants or create some variables.
+
+
+# region Integration tests
+class FolderCrawlerTestsMain(unittest.TestCase):
+    def setUp(self):
+        self.folder_crawler = FolderCrawler(path=".")
+
+    def test_main_1(self):
+        os.mkdir('temp_dir')
+        with open('temp_dir/temp_file.txt', 'w') as f:
+            f.write('This is a temporary file for testing.')
+        self.folder_crawler.path = "temp_dir"
+        self.folder_crawler.main()
+        os.remove('temp_dir/temp_file.txt')
+        os.rmdir('temp_dir')
+        os.remove(SavedCrawls.FILES)
+        os.remove(SavedCrawls.FOLDERS)
+        os.remove(SavedCrawls.SKIPPED)
+        os.rmdir(SavedCrawls.SAVED_CRAWLS_FOLDER)
+
+        self.assertTrue(self.folder_crawler.files[COLUMN_NAMES[0]][0] == r"temp_dir\temp_file.txt")
+        self.assertTrue(self.folder_crawler.files[COLUMN_NAMES[3]][0] == "\x1b[31m 37 \x1b[0m")
+
+    def test_main_2(self):
+        os.mkdir('temp_dir')
+        os.mkdir('temp_dir/sub_dir')
+        with open('temp_dir/sub_dir/temp_file.txt', 'w') as f:
+            f.write('This is a temporary file for testing.')
+        self.folder_crawler.path = "temp_dir"
+        self.folder_crawler.main()
+        os.remove('temp_dir/sub_dir/temp_file.txt')
+        os.rmdir('temp_dir/sub_dir')
+        os.rmdir('temp_dir')
+        os.remove(SavedCrawls.FILES)
+        os.remove(SavedCrawls.FOLDERS)
+        os.remove(SavedCrawls.SKIPPED)
+        os.rmdir(SavedCrawls.SAVED_CRAWLS_FOLDER)
+
+        self.assertTrue(self.folder_crawler.files[COLUMN_NAMES[0]][0] == r"temp_dir\sub_dir\temp_file.txt")
+        self.assertTrue(self.folder_crawler.files[COLUMN_NAMES[3]][0] == "\x1b[31m 37 \x1b[0m")
+        self.assertTrue(self.folder_crawler.folders[COLUMN_NAMES[0]][0] == r"temp_dir\sub_dir")
+        self.assertTrue(self.folder_crawler.folders[COLUMN_NAMES[3]][0] == "\x1b[31m 37 \x1b[0m")
+        self.assertTrue(self.folder_crawler.skipped.empty)
+
+class FolderCrawlerTestsGetPathWithProperties(unittest.TestCase):
+    """
+    In these tests we are not really focusing on details which the method returns.
+    We just focus if the method returns the correct number of items and if the second item is boolean.
+    """
+    def setUp(self):
+        self.folder_crawler = FolderCrawler(path=".")
+
+    def test_get_path_with_properties_with_no_subdirectories1(self):
+        os.mkdir('temp_dir')
+        with open('temp_dir/temp_file.txt', 'w') as f:
+            f.write('This is a temporary file for testing.')
+        result = self.folder_crawler._get_path_with_properties(('temp_dir', True))
+        os.remove('temp_dir/temp_file.txt')
+        os.rmdir('temp_dir')
+        self.assertEqual((len(result[0]), result[1]), (len(COLUMN_NAMES), True))
+
+    def test_get_path_with_properties_with_no_subdirectories2(self):
+        with open('temp_file.txt', 'w') as f:
+            f.write('This is a temporary file for testing.')
+        result = self.folder_crawler._get_path_with_properties(('temp_file.txt', False))
+        os.remove('temp_file.txt')
+        self.assertEqual((len(result[0]), result[1]), (len(COLUMN_NAMES), False))
+
+
+class FolderCrawlerTestsResolveSizes(unittest.TestCase):
+    def setUp(self):
+        self.folder_crawler = FolderCrawler(path=".")
+
+    def test_resolve_sizes_with_valid_size(self):
+        size = 1024
+        result = self.folder_crawler._resolve_sizes(size)
+        self.assertEqual(result, ("\x1b[33m1.00KB\x1b[0m", "\x1b[33m 1024 \x1b[0m"))
+
+    def test_resolve_sizes_with_none(self):
+        size = NONE
+        result = self.folder_crawler._resolve_sizes(size)
+        self.assertEqual(result, (NONE, NONE))
+
+
+# endregion
+
+# region Unit tests
+class FolderCrawlerTestsFilterPath(unittest.TestCase):
+    def setUp(self):
+        self.container = pd.DataFrame({
+            'Path': ['path1', 'path2', 'path3'],
+            'Changed': ['change1', 'change2', 'change3'],
+            'Size readable': ['1KB', '2KB', '3KB'],  # formmating of colors ommited here
+            'Size bytes': ['1024B', '2048B', '3072B']  # formmating of colors ommited here
+        })
+
+    def test_filter_paths_with_matching_substring(self):
+        filter_path = 'path'
+        result = FolderCrawler._filter_paths(self.container, filter_path)
+        self.assertEqual(len(result), 3)
+
+    def test_filter_paths_with_no_matching_substring(self):
+        filter_path = 'nonexistent'
+        result = FolderCrawler._filter_paths(self.container, filter_path)
+        self.assertEqual(len(result), 0)
+
+
+class FolderCrawlerTestsFilterSizes(unittest.TestCase):
+    def setUp(self):
+        self.container = pd.DataFrame({
+            'Path': ['path1', 'path2', 'path3'],
+            'Changed': ['change1', 'change2', 'change3'],
+            # size readable does not have color formatting here since it is not important for the test
+            'Size readable': ['1KB', '2KB', '3KB'],
+            'Size bytes': ["\x1b[33m 1024 \x1b[0m", "\x1b[33m 2048 \x1b[0m", "\x1b[33m 3072 \x1b[0m"]
+        })
+
+    def test_filter_sizes_greater_than_equal(self):
+        result = FolderCrawler._filter_sizes(self.container, 2048, ">=")
+        self.assertEqual(len(result), 2)
+
+    def test_filter_sizes_less_than_equal(self):
+        result = FolderCrawler._filter_sizes(self.container, 2048, "<=")
+        self.assertEqual(len(result), 2)
+
+
+class FolderCrawlerTestsFilterLastChange(unittest.TestCase):
+    def setUp(self):
+        self.folder_crawler = FolderCrawler(path=".")
+
+    def test_filter_last_change_greater_than_equal(self):
+        data = pd.DataFrame(
+            {'Path': ['path1', 'path2'], 'Changed': [datetime.datetime(2022, 1, 1), datetime.datetime(2022, 2, 1)]})
+        filter_date = datetime.datetime(2022, 1, 1)
+        result = FolderCrawler._filter_last_change(data, filter_date, ">=")
+        self.assertEqual(len(result), 2)
+
+    def test_filter_last_change_less_than_equal(self):
+        data = pd.DataFrame(
+            {'Path': ['path1', 'path2'], 'Changed': [datetime.datetime(2022, 1, 1), datetime.datetime(2022, 2, 1)]})
+        filter_date = datetime.datetime(2022, 1, 1)
+        result = FolderCrawler._filter_last_change(data, filter_date, "<=")
+        self.assertEqual(len(result), 1)
 
 
 class FolderCrawlerTestsLoadCrawledData(unittest.TestCase):
@@ -378,39 +525,40 @@ class FolderCrawlerTestsGetCurrentTime(unittest.TestCase):
         self.assertEqual(result.minute, now.minute)
 
 
+# TODO: Adjust the test to the method which I changed.
 class FolderCrawlerTestsConvertBytesToReadableFormat(unittest.TestCase):
     def setUp(self):
         self.folder_crawler = FolderCrawler(path=".")
 
     def test_bytes_to_readable_format_zero_bytes(self):
         result_short, result_long = self.folder_crawler._convert_bytes_to_readable_format(0)
-        self.assertEqual(result_short, "\033[0;31;10m0.00B\033[0m")
-        self.assertEqual(result_long, "\033[0;31;10m 0 \033[0m")
+        self.assertEqual(result_short, "\x1b[31m0.00B\x1b[0m")
+        self.assertEqual(result_long, "\x1b[31m 0 \x1b[0m")
 
     def test_bytes_to_readable_format_one_byte(self):
         result_short, result_long = self.folder_crawler._convert_bytes_to_readable_format(1)
-        self.assertEqual(result_short, "\033[0;31;10m1.00B\033[0m")
-        self.assertEqual(result_long, "\033[0;31;10m 1 \033[0m")
+        self.assertEqual(result_short, "\x1b[31m1.00B\x1b[0m")
+        self.assertEqual(result_long, "\x1b[31m 1 \x1b[0m")
 
     def test_bytes_to_readable_format_one_kilobyte(self):
         result_short, result_long = self.folder_crawler._convert_bytes_to_readable_format(1024)
-        self.assertEqual(result_short, "\033[0;33;10m1.00KB\033[0m")
-        self.assertEqual(result_long, "\033[0;33;10m 1024 \033[0m")
+        self.assertEqual(result_short, "\x1b[33m1.00KB\x1b[0m")
+        self.assertEqual(result_long, "\x1b[33m 1024 \x1b[0m")
 
     def test_bytes_to_readable_format_one_megabyte(self):
         result_short, result_long = self.folder_crawler._convert_bytes_to_readable_format(1024 * 1024)
-        self.assertEqual(result_short, "\033[0;32;10m1.00MB\033[0m")
-        self.assertEqual(result_long, "\033[0;32;10m 1048576 \033[0m")
+        self.assertEqual(result_short, "\x1b[32m1.00MB\x1b[0m")
+        self.assertEqual(result_long, "\x1b[32m 1048576 \x1b[0m")
 
     def test_bytes_to_readable_format_one_gigabyte(self):
         result_short, result_long = self.folder_crawler._convert_bytes_to_readable_format(1024 * 1024 * 1024)
-        self.assertEqual(result_short, "\033[0;34;10m1.00GB\033[0m")
-        self.assertEqual(result_long, "\033[0;34;10m 1073741824 \033[0m")
+        self.assertEqual(result_short, "\x1b[34m1.00GB\x1b[0m")
+        self.assertEqual(result_long, "\x1b[34m 1073741824 \x1b[0m")
 
     def test_bytes_to_readable_format_one_terabyte(self):
         result_short, result_long = self.folder_crawler._convert_bytes_to_readable_format(1024 * 1024 * 1024 * 1024)
-        self.assertEqual(result_short, "\033[0;36;10m1.00TB\033[0m")
-        self.assertEqual(result_long, "\033[0;36;10m 1099511627776 \033[0m")
+        self.assertEqual(result_short, "\x1b[36m1.00TB\x1b[0m")
+        self.assertEqual(result_long, "\x1b[36m 1099511627776 \x1b[0m")
 
 
 class TestFolderCrawlerFormatTimespan(unittest.TestCase):
@@ -507,6 +655,9 @@ class TestFolderCrawlerInitializeFiles(unittest.TestCase):
         mock_open.assert_any_call(mock_folders, mock_append_mode, encoding=mock_encoding)
         mock_open.assert_any_call(mock_skipped, mock_append_mode, encoding=mock_encoding)
         self.assertEqual(mock_open.call_count, 3)
+
+
+# endregion
 
 
 if __name__ == '__main__':
