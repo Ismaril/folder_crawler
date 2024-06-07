@@ -1,58 +1,45 @@
 from folder_crawler import FolderCrawler
-import argparse
+from cmd_args import command_line_arguments_parser, resolve_default_values
 
-########################################################################################################################
-# HOW TO CRAWL AND PRINT ITEMS:
-# Start with specifying the path of the folder you want to crawl in ctor. Then chose if you want to crawl deep or not.
-# Call method crawl.
-# Call method print_items with parameters you want to print. You can also filter the output.
-# In case you performed time-consuming crawl already, comment out the crawl method and just call print_items method.
-#   The previous crawl will be instantly read out from the saved txt files.
+# PERFORMANCE (JUST FOR REFERENCE):
+# With multiprocessing implemented in this code, you can crawl bunch of data.
+# 4.57 GHz 8Core (equals 100% utilization at my machine) will crawl and save all paths from 715GB in ~4.5 minutes.
+# Extracted data after the crawl of the data mentioned above were ~260MB.
 
+# HOW TO ADD A NEW COLUMN INTO TABLE:
+# 1. In "folder_crawler.py", add a new item into "COLUMN_NAMES" at last position.
+# 2. Create a new method in "FolderCrawler" class which will compute the new property.
+# 3. In "folder_crawler.py", put the result of the above method at last position into "data_complete" tuple in method
+#  "_get_path_with_properties".
 
-# HOW TO READ OUT SAVED FILES:
-# Call method read_content_of_file with the path of the file you want to read out.
-
-
-# HOW TO COMPARE SAVED CRAWLS:
-# Perform a crawl in a first desired folder and then rename the output txt file in saved_crawls folder.
-# Perform a crawl in a second desired folder.
-# Call method compare_saved_crawls with the paths of the two files you want to compare.
-# The method will return the difference between the two files.
-
-
-# PERFORMANCE:
-# For you info, you can also crawl complete disk. With multiprocessing implemented in this code, it will be quite fast.
-# 4.57 GHz 8Core utilised therefore at 100% will crawl and save all paths from 715GB in 3 minutes.
-########################################################################################################################
+# todo: check documentation
+# todo: check that private methods do each only one thing. Isolate as much outside elements as possible.
 if __name__ == '__main__':
-    # COMMAND LINE ARGUMENTS
-    # Create the parser
-    parser = argparse.ArgumentParser(description="Python argument parser from command line")
-
-    # Add arguments
-    parser.add_argument('-p', '--path', type=str, help="Path to the folder you want to crawl.")
-    parser.add_argument('-c', '--crawl', action='store_true', help="Enable crawling of specified folder.")
-    parser.add_argument('-s', '--shallow', action='store_true', help="Do not crawl deep into sub-folders.")
-    parser.add_argument('-f', '--files', action='store_true', help="Print files.")
-    parser.add_argument('-d', '--dirs', action='store_true', help="Print directories.")
-    parser.add_argument('-e', '--excluded', action='store_true', help="Print skipped items.")
-    args = parser.parse_args()
-    cr = FolderCrawler(path=fr"{args.path}")
-    cr.main(
-        crawl=args.crawl,
-        crawl_deep=not args.shallow,
-        print_files=args.files,
-        print_folders=args.dirs,
-        print_skipped_items=args.excluded,
-    )
+    ####################################################################################################################
+    # COMMAND LINE USAGE
+    # cmd_args = command_line_arguments_parser()
+    # default_values = resolve_default_values(cmd_args)
+    #
+    # cr = FolderCrawler(path=fr"{cmd_args.path}")
+    # cr.main(
+    #     crawl=cmd_args.crawl,
+    #     crawl_deep=not cmd_args.shallow,
+    #     print_files=cmd_args.visualize,
+    #     print_folders=cmd_args.visualize,
+    #     print_skipped_items=cmd_args.excluded,
+    #     filter_path=default_values[0],
+    #     filter_size=default_values[1],
+    #     filter_size_sign=default_values[2],
+    #     filter_date=default_values[3],
+    #     filter_date_sign=default_values[4],
+    # )
     ####################################################################################################################
     # NORMAL USAGE WITHIN THE IDE
-    # cr = FolderCrawler(path=r"C:\\Users\lazni\Downloads")
-    # cr.main(
-    #     crawl=True,
-    #     crawl_deep=False,
-    #     print_files=True,
-    #     print_folders=True,
-    #     print_skipped_items=True,
-    # )
+    cr = FolderCrawler(path=r"C:\\Users\lazni\Downloads")
+    cr.main(
+        crawl=True,
+        crawl_deep=False,
+        print_files=True,
+        print_folders=True,
+        print_skipped_items=True,
+    )
