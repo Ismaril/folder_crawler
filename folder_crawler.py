@@ -76,7 +76,7 @@ class FolderCrawler:
         """
 
         # INITIALIZE THE STORAGE FOR CRAWLING RESULTS
-        self.initialize_storage(SavedCrawls.SAVED_CRAWLS_FOLDER,
+        self.initialize_storage(SavedCrawls.ROOT,
                                 *(SavedCrawls.FILES, SavedCrawls.FOLDERS, SavedCrawls.SKIPPED))
         if crawl:
             # CRAWL
@@ -125,11 +125,11 @@ class FolderCrawler:
         This high-level wrapper method is used to load the crawled data.
         """
         self.files = self.load_crawled_data(self.files, ItemType.FILES,
-                                            SavedCrawls.SAVED_CRAWLS_FOLDER, SavedCrawls.EXTENSION)
+                                            SavedCrawls.ROOT, SavedCrawls.EXTENSION)
         self.folders = self.load_crawled_data(self.folders, ItemType.FOLDERS,
-                                              SavedCrawls.SAVED_CRAWLS_FOLDER, SavedCrawls.EXTENSION)
+                                              SavedCrawls.ROOT, SavedCrawls.EXTENSION)
         self.skipped = self.load_crawled_data(self.skipped, ItemType.SKIPPED,
-                                              SavedCrawls.SAVED_CRAWLS_FOLDER, SavedCrawls.EXTENSION)
+                                              SavedCrawls.ROOT, SavedCrawls.EXTENSION)
 
     def print_dataframes(self, print_folders: bool, print_files: bool, print_skipped_items: bool,
                          filter_path: str, filter_size: int, filter_size_sign: str,

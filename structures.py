@@ -13,12 +13,11 @@ class ItemType:
 
 @dataclass
 class SavedCrawls:
-    SAVED_CRAWLS_FOLDER = "saved_crawls"
+    ROOT = "saved_crawls"
     EXTENSION = ".txt"
-    FILES = os.path.join(SAVED_CRAWLS_FOLDER, f"{ItemType.FILES}{EXTENSION}")
-    FOLDERS = os.path.join(SAVED_CRAWLS_FOLDER, f"{ItemType.FOLDERS}{EXTENSION}")
-    SKIPPED = os.path.join(SAVED_CRAWLS_FOLDER, f"{ItemType.SKIPPED}{EXTENSION}")
-    PARAMETERS = os.path.join(SAVED_CRAWLS_FOLDER, f"{ItemType.PARAMETERS}{EXTENSION}")
+    FILES = os.path.join(ROOT, f"{ItemType.FILES}{EXTENSION}")
+    FOLDERS = os.path.join(ROOT, f"{ItemType.FOLDERS}{EXTENSION}")
+    SKIPPED = os.path.join(ROOT, f"{ItemType.SKIPPED}{EXTENSION}")
 
 
 @dataclass
@@ -28,11 +27,8 @@ class Messages:
     WHOLE_PROCES_TOOK = "THE WHOLE PROCESS TOOK:"
     NR_OF_CRAWLED_DATA = "SUMMARY OF CRAWLED DATA:"
     SAVING_RESULTS = "Saving into csv file:"
-    SAVING_RESULTS_DONE = "Saving done:"
     DATAFRAME_PREPARATION = "Preparing dataframes."
-    DATAFRAME_PREPARATION_DONE = "Preparation of dataframe is done:"
     STARTING_MULTI_PROCESSING = "Starting multi-processing pool. The crawling starts now."
-    PRINT_ENDING = f"\n{'-' * 150}\n"
 
 
 @dataclass
@@ -40,15 +36,28 @@ class FileOps:
     ENCODING = "UTF-8"
     READ_MODE = "r"
     APPEND_MODE = "a"
+    WRITE_MODE = "w"
 
 
-class ColorFormatting:
-    COLORS = [Fore.RED, Fore.YELLOW, Fore.GREEN, Fore.BLUE, Fore.CYAN]
-    UNITS = ["B", "KB", "MB", "GB", "TB"]
+@dataclass
+class ByteUnit:
+    BYTE = "B"
+    KILOBYTE = "KB"
+    MEGABYTE = "MB"
+    GIGABYTE = "GB"
+    TERABYTE = "TB"
 
+
+@dataclass
 class ByteSize:
     BYTE = 1
     KILOBYTE = 1024
-    MEGABYTE = 1024 ** 2
-    GIGABYTE = 1024 ** 3
-    TERABYTE = 1024 ** 4
+    MEGABYTE = 1048576
+    GIGABYTE = 1073741824
+    TERABYTE = 1099511627776
+
+
+@dataclass
+class ColorFormatting:
+    COLORS = [Fore.RED, Fore.YELLOW, Fore.GREEN, Fore.BLUE, Fore.CYAN]
+    UNITS = [ByteUnit.BYTE, ByteUnit.KILOBYTE, ByteUnit.MEGABYTE, ByteUnit.GIGABYTE, ByteUnit.TERABYTE]
