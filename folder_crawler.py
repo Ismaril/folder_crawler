@@ -149,7 +149,7 @@ class FolderCrawler:
             self._print_data(self.skipped, filter_path, filter_size, filter_size_sign,
                              filter_date, filter_date_sign, ItemType.SKIPPED, crawl_deep)
 
-    def _get_path_with_properties(self, path_tuple: tuple[str, bool]) -> [tuple, bool]:
+    def _get_path_with_properties(self, path_tuple: tuple[str, bool]) -> tuple[tuple, bool]:
         """
         This method gets all the properties of the path and returns them as a tuple with a boolean value.
 
@@ -291,7 +291,7 @@ class FolderCrawler:
         elif sign == "<=":
             filter_ = numbers <= filter_size
 
-        return container[filter_]
+        return container.loc[filter_]
 
 
     @staticmethod
@@ -577,12 +577,14 @@ class FolderCrawler:
         Since it is planned to use as an argument in other methods, I decided to use *args.
         """
         # We are expecting only 5 arguments, therefore discard the rest with *_
-        color, item_to_format, unit, reset_formatting, format_long, *_ = args
+        color, number, unit, reset_formatting, format_long, *_ = args
 
         if format_long:
-            return f"{color} {item_to_format} {reset_formatting}"
+            # long number
+            return f"{color} {number} {reset_formatting}"
         else:
-            return f"{color}{item_to_format:.2f}{unit}{reset_formatting}"
+            # transformed to short number
+            return f"{color}{number:.2f}{unit}{reset_formatting}"
 
     @staticmethod
     def _format_timestamp(seconds: float) -> str:

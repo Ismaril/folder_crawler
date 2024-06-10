@@ -6,7 +6,7 @@ import pandas as pd
 
 from tabulate import tabulate
 from colorama import Style, Fore
-from structures import SavedCrawls, Messages, ColorFormatting, ByteSize, ItemType, FileOps, ByteUnit
+from structures import SavedCrawls, Messages, ColorFormatting, ByteSize, ItemType, FileOps, ByteUnit, ColoredBytes
 from folder_crawler import FolderCrawler, NONE, COLUMN_NAMES, TABLE_HEADER, TABLE_FORMAT
 from unittest.mock import patch, mock_open
 from test_helper import TestHelper
@@ -18,12 +18,14 @@ TEMP_FILE_1 = "temp_file1.txt"
 TEMP_FILE_2 = "temp_file2.txt"
 TEST_TEXT = "This is a temporary file for testing."
 CURRENT_DIRECTORY = "."
-TEST_DATAFRAME = {
-    COLUMN_NAMES[0]: ['path1', 'path2', 'path3'],
-    'Changed': [datetime.datetime(2022, 1, 1), datetime.datetime(2022, 2, 1), datetime.datetime(2022, 3, 1)],
-    'Size readable': ['\x1b[33m1.00KB\x1b[0m', '\x1b[33m2.00KB\x1b[0m', '\x1b[33m3.00KB\x1b[0m'],
-    'Size bytes': ["\x1b[33m 1024 \x1b[0m", "\x1b[33m 2048 \x1b[0m", "\x1b[33m 3072 \x1b[0m"]
+
+TEST_DICT = {
+    COLUMN_NAMES[0]: ['C:/Users', 'C:/Users/Subfolder', 'C:/Users/Subfolder/Subfolder2'],
+    COLUMN_NAMES[1]: [datetime.datetime(2022, 1, 1), datetime.datetime(2022, 2, 1), datetime.datetime(2022, 3, 1)],
+    COLUMN_NAMES[2]: [ColoredBytes.ONE_KB_SHORT, ColoredBytes.TWO_KB_SHORT, ColoredBytes.THREE_KB_SHORT],
+    COLUMN_NAMES[3]: [ColoredBytes.ONE_KB_LONG, ColoredBytes.TWO_KB_LONG, ColoredBytes.THREE_KB_LONG]
 }
+TEST_DATAFRAME = pd.DataFrame(TEST_DICT)
 
 
 # region Integration tests
@@ -46,7 +48,7 @@ class FolderCrawlerTestsMain(unittest.TestCase):
 
         # Evaluate
         self.assertTrue(self.folder_crawler.files[COLUMN_NAMES[0]][0] == os.path.join(TEMP_DIR, TEMP_FILE_1))
-        self.assertTrue(self.folder_crawler.files[COLUMN_NAMES[3]][0] == "\x1b[31m 37 \x1b[0m")
+        self.assertTrue(self.folder_crawler.files[COLUMN_NAMES[3]][0] == ColoredBytes.THIRTYSEVEN_BYTES_LONG)
 
     def test_main_2(self):
         # Prepare the test environment
@@ -65,9 +67,9 @@ class FolderCrawlerTestsMain(unittest.TestCase):
 
         # Evaluate
         self.assertTrue(self.folder_crawler.files[COLUMN_NAMES[0]][0] == os.path.join(TEMP_DIR, SUB_DIR_1, TEMP_FILE_1))
-        self.assertTrue(self.folder_crawler.files[COLUMN_NAMES[3]][0] == "\x1b[31m 37 \x1b[0m")
+        self.assertTrue(self.folder_crawler.files[COLUMN_NAMES[3]][0] == ColoredBytes.THIRTYSEVEN_BYTES_LONG)
         self.assertTrue(self.folder_crawler.folders[COLUMN_NAMES[0]][0] == os.path.join(TEMP_DIR, SUB_DIR_1))
-        self.assertTrue(self.folder_crawler.folders[COLUMN_NAMES[3]][0] == "\x1b[31m 37 \x1b[0m")
+        self.assertTrue(self.folder_crawler.folders[COLUMN_NAMES[3]][0] == ColoredBytes.THIRTYSEVEN_BYTES_LONG)
         self.assertTrue(self.folder_crawler.skipped.empty)
 
 
@@ -78,48 +80,57 @@ class FolderCrawlerTestsGetPathWithProperties(unittest.TestCase):
     """
 
     def setUp(self):
-        self.folder_crawler = FolderCrawler(path=CURRENT_DIRECTORY)
+        self.fc = FolderCrawler(path=CURRENT_DIRECTORY)
 
     def test_get_path_with_properties_with_no_subdirectories1(self):
-
         # Prepare the test environment
         test_helper = TestHelper(TEMP_DIR, os.path.join(TEMP_DIR, TEMP_FILE_1))
         test_helper.create_test_paths(TEST_TEXT)
+        is_directory = True
 
         # Run test
-        result = self.folder_crawler._get_path_with_properties((TEMP_DIR, True))
+        result_tuple = self.fc._get_path_with_properties((TEMP_DIR, is_directory))
+        nr_of_properties = len(result_tuple[0])
+        is_directory_ = result_tuple[1]
 
         # Clean up the test environment
         test_helper.delete_test_paths()
 
         # Evaluate
-        self.assertEqual((len(result[0]), result[1]), (len(COLUMN_NAMES), True))
+        result = (nr_of_properties, is_directory_)
+        expected = (len(COLUMN_NAMES), is_directory)
+        self.assertEqual(result, expected)
 
     def test_get_path_with_properties_with_no_subdirectories2(self):
-
         # Prepare the test environment
         test_helper = TestHelper(TEMP_FILE_1)
         test_helper.create_test_paths(TEST_TEXT)
+        is_directory = False
 
-        result = self.folder_crawler._get_path_with_properties((TEMP_FILE_1, False))
+        # Run test
+        result_tuple = self.fc._get_path_with_properties((TEMP_FILE_1, is_directory))
+        nr_of_properties = len(result_tuple[0])
+        is_directory_ = result_tuple[1]
 
-        os.remove(TEMP_FILE_1)
+        # Clean up the test environment
+        test_helper.delete_test_paths()
 
-        self.assertEqual((len(result[0]), result[1]), (len(COLUMN_NAMES), False))
+        # Evaluate
+        result = (nr_of_properties, is_directory_)
+        expected = (len(COLUMN_NAMES), is_directory)
+        self.assertEqual(result, expected)
 
 
 class FolderCrawlerTestsResolveSizes(unittest.TestCase):
     def setUp(self):
-        self.folder_crawler = FolderCrawler(path=CURRENT_DIRECTORY)
+        self.fc = FolderCrawler(path=CURRENT_DIRECTORY)
 
     def test_resolve_sizes_with_valid_size(self):
-        size = 1024
-        result = self.folder_crawler._resolve_sizes(size)
-        self.assertEqual(result, ("\x1b[33m1.00KB\x1b[0m", "\x1b[33m 1024 \x1b[0m"))
+        result = self.fc._resolve_sizes(size=ByteSize.KILOBYTE)
+        self.assertEqual(result, (ColoredBytes.ONE_KB_SHORT, ColoredBytes.ONE_KB_LONG))
 
     def test_resolve_sizes_with_none(self):
-        size = NONE
-        result = self.folder_crawler._resolve_sizes(size)
+        result = self.fc._resolve_sizes(size=NONE)
         self.assertEqual(result, (NONE, NONE))
 
 
@@ -130,42 +141,39 @@ class FolderCrawlerTestsResolveSizes(unittest.TestCase):
 class FolderCrawlerTestsGetIntsFromStrDataFrameColumn(unittest.TestCase):
     def setUp(self):
         self.folder_crawler = FolderCrawler(path=CURRENT_DIRECTORY)
-        self.folder_crawler.files = pd.DataFrame(TEST_DATAFRAME)
+        self.folder_crawler.files = TEST_DATAFRAME
 
     def test_extract_integers_from_string(self):
         result = self.folder_crawler._get_ints_from_str_dataframe_column(self.folder_crawler.files, COLUMN_NAMES[3])
-        expected_result = pd.Series([1024, 2048, 3072], dtype='int64', name=COLUMN_NAMES[3])
-        print(result)
-        print(expected_result)
-        pd.testing.assert_series_equal(result, expected_result)
+        expected_integers = pd.Series([1024, 2048, 3072], dtype='int64', name=COLUMN_NAMES[3])
+        pd.testing.assert_series_equal(result, expected_integers)
 
 
 class FolderCrawlerTestsFilterPath(unittest.TestCase):
-    def setUp(self):
-        self.container = pd.DataFrame(TEST_DATAFRAME)
-
     def test_filter_paths_with_matching_substring(self):
-        filter_path = 'path'
-        result = FolderCrawler._filter_paths(self.container, filter_path, COLUMN_NAMES[0])
-        self.assertEqual(len(result), 3)
+        filter_path = 'Users'
+        result = FolderCrawler._filter_paths(TEST_DATAFRAME, filter_path, COLUMN_NAMES[0])
+        expected_number_of_filtered_paths = 3
+        self.assertEqual(len(result), expected_number_of_filtered_paths)
 
     def test_filter_paths_with_no_matching_substring(self):
         filter_path = 'nonexistent'
-        result = FolderCrawler._filter_paths(self.container, filter_path, COLUMN_NAMES[0])
-        self.assertEqual(len(result), 0)
+        result = FolderCrawler._filter_paths(TEST_DATAFRAME, filter_path, COLUMN_NAMES[0])
+        expected_number_of_filtered_paths = 0
+        self.assertEqual(len(result), expected_number_of_filtered_paths)
 
 
 class FolderCrawlerTestsFilterSizes(unittest.TestCase):
-    def setUp(self):
-        self.container = pd.DataFrame(TEST_DATAFRAME)
 
     def test_filter_sizes_greater_than_equal(self):
-        result = FolderCrawler._filter_sizes(self.container, 1024, ">=", pd.Series([1024, 2048, 3072]))
-        self.assertEqual(len(result), 3)
+        result = FolderCrawler._filter_sizes(TEST_DATAFRAME, 1024, ">=", pd.Series([1024, 2048, 3072]))
+        expected_number_of_filtered_integers = 3
+        self.assertEqual(len(result), expected_number_of_filtered_integers)
 
     def test_filter_sizes_less_than_equal(self):
-        result = FolderCrawler._filter_sizes(self.container, 1024, "<=", pd.Series([1024, 2048, 3072]))
-        self.assertEqual(len(result), 1)
+        result = FolderCrawler._filter_sizes(TEST_DATAFRAME, 1024, "<=", pd.Series([1024, 2048, 3072]))
+        expected_number_of_filtered_integers = 1
+        self.assertEqual(len(result), expected_number_of_filtered_integers)
 
 
 class FolderCrawlerTestsFilterLastChange(unittest.TestCase):
@@ -173,16 +181,16 @@ class FolderCrawlerTestsFilterLastChange(unittest.TestCase):
         self.folder_crawler = FolderCrawler(path=CURRENT_DIRECTORY)
 
     def test_filter_last_change_greater_than_equal(self):
-        data = pd.DataFrame(TEST_DATAFRAME)
         filter_date = datetime.datetime(2022, 1, 1)
-        result = FolderCrawler._filter_last_change(data, filter_date, ">=", COLUMN_NAMES[1])
-        self.assertEqual(len(result), 3)
+        result = FolderCrawler._filter_last_change(TEST_DATAFRAME, filter_date, ">=", COLUMN_NAMES[1])
+        expected_number_of_filtered_dates = 3
+        self.assertEqual(len(result), expected_number_of_filtered_dates)
 
     def test_filter_last_change_less_than_equal(self):
-        data = pd.DataFrame(TEST_DATAFRAME)
         filter_date = datetime.datetime(2022, 1, 1)
-        result = FolderCrawler._filter_last_change(data, filter_date, "<=", COLUMN_NAMES[1])
-        self.assertEqual(len(result), 1)
+        result = FolderCrawler._filter_last_change(TEST_DATAFRAME, filter_date, "<=", COLUMN_NAMES[1])
+        expected_number_of_filtered_dates = 1
+        self.assertEqual(len(result), expected_number_of_filtered_dates)
 
 
 class FolderCrawlerTestsLoadCrawledData(unittest.TestCase):
@@ -190,42 +198,38 @@ class FolderCrawlerTestsLoadCrawledData(unittest.TestCase):
         self.folder_crawler = FolderCrawler(path=CURRENT_DIRECTORY)
 
     def test_load_crawled_data_with_empty_container(self):
-        folder = SavedCrawls.ROOT
-        files = SavedCrawls.FILES
-        extension = SavedCrawls.EXTENSION
-        os.mkdir(folder)
-        with open(files, FileOps.WRITE_MODE) as f:
-            f.write("Path,Changed,Size readable,Size bytes\n")
-
+        # Prepare the test environment
+        test_helper = TestHelper(SavedCrawls.ROOT, SavedCrawls.FILES)
+        test_helper.create_test_paths(",".join(COLUMN_NAMES) + "\n")
         empty_df = pd.DataFrame()
-        item_type = ItemType.FILES
-        result = FolderCrawler.load_crawled_data(empty_df, item_type, folder, extension)
-        expected_path = os.path.join(folder, f"{item_type}{extension}")
+        expected_path = os.path.join(SavedCrawls.ROOT, f"{ItemType.FILES}{SavedCrawls.EXTENSION}")
         expected_df = pd.read_csv(expected_path)
 
-        os.remove(files)
-        os.rmdir(folder)
+        # Run test
+        result = FolderCrawler.load_crawled_data(empty_df, ItemType.FILES, SavedCrawls.ROOT, SavedCrawls.EXTENSION)
+
+        # Clean up the test environment
+        test_helper.delete_test_paths()
+
+        # Evaluate
         pd.testing.assert_frame_equal(result, expected_df)
 
     def test_load_crawled_data_with_non_empty_container(self):
-        non_empty_df = pd.DataFrame(
-            {COLUMN_NAMES[0]: ['path1'], 'Changed': ['change1'], 'Size readable': ['size1'], 'Size bytes': ['bytes1']})
         item_type = "files"
-        result = FolderCrawler.load_crawled_data(non_empty_df, item_type,
-                                                 SavedCrawls.ROOT, SavedCrawls.EXTENSION)
-        pd.testing.assert_frame_equal(result, non_empty_df)
+        result = FolderCrawler.load_crawled_data(TEST_DATAFRAME, item_type, SavedCrawls.ROOT, SavedCrawls.EXTENSION)
+        pd.testing.assert_frame_equal(result, TEST_DATAFRAME)
 
 
 class FolderCrawlerTestsGetCrawlSummary(unittest.TestCase):
-    # The strings will come into parameters also with color formating but for the simplicity, they are written as plain
-    # strings here.
     def test_summary_with_total_size(self):
-        result = FolderCrawler._get_crawl_summary(True, Messages.NR_OF_CRAWLED_DATA, "1.00KB", "1024B")
-        self.assertEqual(result, (Messages.NR_OF_CRAWLED_DATA, "1.00KB", "1024B", "\n\n"))
+        result = FolderCrawler._get_crawl_summary(True, Messages.NR_OF_CRAWLED_DATA, ColoredBytes.ONE_KB_SHORT, ColoredBytes.ONE_KB_LONG)
+        expected_summary = (Messages.NR_OF_CRAWLED_DATA, ColoredBytes.ONE_KB_SHORT, ColoredBytes.ONE_KB_LONG, "\n\n")
+        self.assertEqual(result, expected_summary)
 
     def test_summary_without_total_size(self):
-        result = FolderCrawler._get_crawl_summary(False, Messages.NR_OF_CRAWLED_DATA, "1.00KB", "1024B")
-        self.assertEqual(result, ("\n",))
+        result = FolderCrawler._get_crawl_summary(False, Messages.NR_OF_CRAWLED_DATA, ColoredBytes.ONE_KB_SHORT, ColoredBytes.ONE_KB_LONG)
+        expected_summary = ("\n",)
+        self.assertEqual(result, expected_summary)
 
 
 class FolderCrawlerTestsFilterData(unittest.TestCase):
@@ -530,118 +534,113 @@ class FolderCrawlerTestsFilterSubdirectories(unittest.TestCase):
 
 class FolderCrawlerTestsGetTimePerformance(unittest.TestCase):
     def setUp(self):
-        self.folder_crawler = FolderCrawler(path=CURRENT_DIRECTORY)
+        self.fc = FolderCrawler(path=CURRENT_DIRECTORY)
 
     def test_time_performance_returns_positive(self):
+        TIME = 0.1
         start_time = time.perf_counter()
-        time.sleep(0.1)
-        result = self.folder_crawler.get_time_performance(start_time)
-        self.assertGreater(result, 0.1)
+        time.sleep(TIME)
+        time_result = self.fc.get_time_performance(start_time)
+        time_expected = TIME
+        self.assertGreater(time_result, time_expected)
 
     def test_time_performance_returns_zero_for_same_time(self):
         start_time = time.perf_counter()
-        result = self.folder_crawler.get_time_performance(start_time)
-        self.assertEqual(result.__floor__(), 0)
+        time_result = self.fc.get_time_performance(start_time).__floor__()
+        time_expected = 0
+        self.assertEqual(time_result, time_expected)
 
 
 class FolderCrawlerTestsGetCurrentTime(unittest.TestCase):
     def setUp(self):
-        self.folder_crawler = FolderCrawler(path=CURRENT_DIRECTORY)
+        self.fc = FolderCrawler(path=CURRENT_DIRECTORY)
 
     def test_current_time_returns_now(self):
-        result = self.folder_crawler._get_current_time()
+        result = self.fc._get_current_time()
         now = datetime.datetime.now()
-        self.assertEqual(result.year, now.year)
-        self.assertEqual(result.month, now.month)
-        self.assertEqual(result.day, now.day)
-        self.assertEqual(result.hour, now.hour)
-        self.assertEqual(result.minute, now.minute)
+        self.assertAlmostEqual(result.year, now.year)
+        self.assertAlmostEqual(result.month, now.month)
+        self.assertAlmostEqual(result.day, now.day)
+        self.assertAlmostEqual(result.hour, now.hour)
+        self.assertAlmostEqual(result.minute, now.minute)
 
 
 class FolderCrawlerTestsColorFormatString(unittest.TestCase):
     def setUp(self):
-        self.folder_crawler = FolderCrawler(path=CURRENT_DIRECTORY)
-
-    def test_color_format_string_long(self):
-        result = self.folder_crawler._color_format_string(Fore.YELLOW, 1, "KB", Style.RESET_ALL, False)
-        self.assertEqual(result, "\x1b[33m1.00KB\x1b[0m")
+        self.fc = FolderCrawler(path=CURRENT_DIRECTORY)
 
     def test_color_format_string_short(self):
-        result = self.folder_crawler._color_format_string(Fore.YELLOW, 1024, None, Style.RESET_ALL, True)
-        self.assertEqual(result, "\x1b[33m 1024 \x1b[0m")
+        size = 1
+        result = self.fc._color_format_string(Fore.YELLOW, size, ByteUnit.KILOBYTE, Style.RESET_ALL, False)
+        self.assertEqual(result, ColoredBytes.ONE_KB_SHORT)
+
+    def test_color_format_string_long(self):
+        result = self.fc._color_format_string(Fore.YELLOW, ByteSize.KILOBYTE, None, Style.RESET_ALL, True)
+        self.assertEqual(result, ColoredBytes.ONE_KB_LONG)
 
 
 class FolderCrawlerTestsConvertBytesToReadableFormat(unittest.TestCase):
-    """
-    Due to hassle with color formatting in hardcoded strings here,
-    I decided to use instead a method to compare the results with actual test result.
-    By that you have more control over the expected results, since previously it was just bunch of
-    hard to read string characters. Disadvantage is that you have to rely on another external component,
-    but I think it is worth it when all above taken into account.
-    """
 
     def setUp(self):
-        self.folder_crawler = FolderCrawler(path=CURRENT_DIRECTORY)
+        self.fc = FolderCrawler(path=CURRENT_DIRECTORY)
+
+    def convert_bytes_test_helper(self, fore_color: str, size_long: int, size_short: int, byte_unit: str):
+        result_short, result_long = self.fc._convert_bytes_to_readable_format(size_long,
+                                                                              ColorFormatting.COLORS,
+                                                                              ColorFormatting.UNITS,
+                                                                              Style.RESET_ALL,
+                                                                              self.fc._color_format_string)
+
+        # Due to hassle with formatted strings I decided to use the method from the production code to get the expected
+        # results. This is not probably the best way to test, but it saves my nerves. If you are unsure about the
+        # methods output, double check how it behaves when it is tested with unit test.
+        expected_short = self.fc._color_format_string(*(fore_color, size_short, byte_unit, Style.RESET_ALL, False))
+        expected_long = self.fc._color_format_string(*(fore_color, size_long, None, Style.RESET_ALL, True))
+
+        return result_short, result_long, expected_short, expected_long
 
     def test_bytes_to_readable_format_zero_bytes(self):
-        size = 0
-        result_short, result_long = self.folder_crawler._convert_bytes_to_readable_format(
-            size, ColorFormatting.COLORS, ColorFormatting.UNITS,
-            Style.RESET_ALL, self.folder_crawler._color_format_string)
-        short = self.folder_crawler._color_format_string(*(Fore.RED, size, ByteUnit.BYTE, Style.RESET_ALL, False))
-        long = self.folder_crawler._color_format_string(*(Fore.RED, size, None, Style.RESET_ALL, True))
-        self.assertEqual(result_short, short)
-        self.assertEqual(result_long, long)
+        byte_size_short = 0
+        byte_size_long = 0
+        result_short, result_long, expected_short, expected_long \
+            = self.convert_bytes_test_helper(Fore.RED, byte_size_long, byte_size_short, ByteUnit.BYTE)
+        self.assertEqual(result_short, expected_short)
+        self.assertEqual(result_long, expected_long)
 
     def test_bytes_to_readable_format_one_byte(self):
-        size = ByteSize.BYTE
-        result_short, result_long = self.folder_crawler._convert_bytes_to_readable_format(
-            ByteSize.BYTE, ColorFormatting.COLORS, ColorFormatting.UNITS,
-            Style.RESET_ALL, self.folder_crawler._color_format_string)
-        short = self.folder_crawler._color_format_string(*(Fore.RED, 1, ByteUnit.BYTE, Style.RESET_ALL, False))
-        long = self.folder_crawler._color_format_string(*(Fore.RED, size, None, Style.RESET_ALL, True))
-        self.assertEqual(result_short, short)
-        self.assertEqual(result_long, long)
+        byte_size_short = 1
+        result_short, result_long, expected_short, expected_long \
+            = self.convert_bytes_test_helper(Fore.RED, ByteSize.BYTE, byte_size_short, ByteUnit.BYTE)
+        self.assertEqual(result_short, expected_short)
+        self.assertEqual(result_long, expected_long)
 
     def test_bytes_to_readable_format_one_kilobyte(self):
-        size = ByteSize.KILOBYTE
-        result_short, result_long = self.folder_crawler._convert_bytes_to_readable_format(
-            size, ColorFormatting.COLORS, ColorFormatting.UNITS,
-            Style.RESET_ALL, self.folder_crawler._color_format_string)
-        short = self.folder_crawler._color_format_string(*(Fore.YELLOW, 1, ByteUnit.KILOBYTE, Style.RESET_ALL, False))
-        long = self.folder_crawler._color_format_string(*(Fore.YELLOW, size, None, Style.RESET_ALL, True))
-        self.assertEqual(result_short, short)
-        self.assertEqual(result_long, long)
+        byte_size_short = 1
+        result_short, result_long, expected_short, expected_long \
+            = self.convert_bytes_test_helper(Fore.YELLOW, ByteSize.KILOBYTE, byte_size_short, ByteUnit.KILOBYTE)
+        self.assertEqual(result_short, expected_short)
+        self.assertEqual(result_long, expected_long)
 
     def test_bytes_to_readable_format_one_megabyte(self):
-        size = ByteSize.MEGABYTE
-        result_short, result_long = self.folder_crawler._convert_bytes_to_readable_format(
-            size, ColorFormatting.COLORS, ColorFormatting.UNITS,
-            Style.RESET_ALL, self.folder_crawler._color_format_string)
-        short = self.folder_crawler._color_format_string(*(Fore.GREEN, 1, ByteUnit.MEGABYTE, Style.RESET_ALL, False))
-        long = self.folder_crawler._color_format_string(*(Fore.GREEN, size, None, Style.RESET_ALL, True))
-        self.assertEqual(result_short, short)
-        self.assertEqual(result_long, long)
+        byte_size_short = 1
+        result_short, result_long, expected_short, expected_long \
+            = self.convert_bytes_test_helper(Fore.GREEN, ByteSize.MEGABYTE, byte_size_short, ByteUnit.MEGABYTE)
+        self.assertEqual(result_short, expected_short)
+        self.assertEqual(result_long, expected_long)
 
     def test_bytes_to_readable_format_one_gigabyte(self):
-        size = ByteSize.GIGABYTE
-        result_short, result_long = self.folder_crawler._convert_bytes_to_readable_format(
-            size, ColorFormatting.COLORS, ColorFormatting.UNITS,
-            Style.RESET_ALL, self.folder_crawler._color_format_string)
-        short = self.folder_crawler._color_format_string(*(Fore.BLUE, 1, ByteUnit.GIGABYTE, Style.RESET_ALL, False))
-        long = self.folder_crawler._color_format_string(*(Fore.BLUE, size, None, Style.RESET_ALL, True))
-        self.assertEqual(result_short, short)
-        self.assertEqual(result_long, long)
+        byte_size_short = 1
+        result_short, result_long, expected_short, expected_long \
+            = self.convert_bytes_test_helper(Fore.BLUE, ByteSize.GIGABYTE, byte_size_short, ByteUnit.GIGABYTE)
+        self.assertEqual(result_short, expected_short)
+        self.assertEqual(result_long, expected_long)
 
     def test_bytes_to_readable_format_one_terabyte(self):
-        size = ByteSize.TERABYTE
-        result_short, result_long = self.folder_crawler._convert_bytes_to_readable_format(
-            size, ColorFormatting.COLORS, ColorFormatting.UNITS,
-            Style.RESET_ALL, self.folder_crawler._color_format_string)
-        short = self.folder_crawler._color_format_string(*(Fore.CYAN, 1, ByteUnit.TERABYTE, Style.RESET_ALL, False))
-        long = self.folder_crawler._color_format_string(*(Fore.CYAN, size, None, Style.RESET_ALL, True))
-        self.assertEqual(result_short, short)
-        self.assertEqual(result_long, long)
+        byte_size_short = 1
+        result_short, result_long, expected_short, expected_long \
+            = self.convert_bytes_test_helper(Fore.CYAN, ByteSize.TERABYTE, byte_size_short, ByteUnit.TERABYTE)
+        self.assertEqual(result_short, expected_short)
+        self.assertEqual(result_long, expected_long)
 
 
 class TestFolderCrawlerFormatTimespan(unittest.TestCase):
