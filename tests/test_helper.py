@@ -4,11 +4,20 @@ from structures import SavedCrawls, FileOps
 
 
 class TestHelper:
+    """
+    This class is used to create and delete test paths for the tests.
+    """
 
     def __init__(self, *paths: str):
         self.paths = paths
 
     def assert_text_files(self, *text_to_write: str, use_the_same_text: bool):
+        """
+        This method asserts if the number of text files matches the number of text messages.
+
+        :param text_to_write: Text messages which will be written into the text files.
+        :param use_the_same_text: If True, the same text will be written into all text files.
+        """
         if use_the_same_text:
             return True
 
@@ -22,6 +31,12 @@ class TestHelper:
         return number_of_text_messages == number_of_text_files
 
     def create_test_paths(self, *texts_to_write: str, use_the_same_text=True):
+        """
+        This method creates test paths with folders and with text files.
+
+        :param texts_to_write: Text messages which will be written into the text files.
+        :param use_the_same_text: If True, the same text will be written into all text files.
+        """
 
         assert self.assert_text_files(*texts_to_write, use_the_same_text=use_the_same_text), \
             (f"Number of text files does not match the number of text messages in TestHelper. "
@@ -39,6 +54,9 @@ class TestHelper:
                 os.mkdir(path)
 
     def delete_test_paths(self):
+        """
+        This method automatically deletes all test paths which were crated by the TestHelper in method "create_test_paths".
+        """
         paths_positions_reversed = self.paths[::-1]
         for path in paths_positions_reversed:
             if path.endswith(SavedCrawls.EXTENSION):
@@ -48,6 +66,9 @@ class TestHelper:
 
     @staticmethod
     def delete_saved_crawls():
+        """
+        This method deletes all files containing saved crawls and the root folder of the saved crawls.
+        """
         os.remove(SavedCrawls.FILES)
         os.remove(SavedCrawls.FOLDERS)
         os.remove(SavedCrawls.SKIPPED)

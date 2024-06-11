@@ -160,25 +160,10 @@ class FolderCrawler:
         item_path = os.path.join(self.path, path) if self.path not in path else path
         last_change = self._get_last_change_of_item(item_path)
         size = self._get_size_of_item(item_path, get_size_folder=is_folder)
-        size_readable, size_total = self._resolve_sizes(size)
+        size_readable, size_total = self._convert_bytes_to_readable_format(size, ColorFormatting.COLORS, ColorFormatting.UNITS, Style.RESET_ALL, function=self._color_format_string)
         data_complete = (item_path, last_change, size_readable, size_total)
 
         return data_complete, is_folder
-
-    def _resolve_sizes(self, size: int | float) -> tuple[str, str] | tuple[float, float]:
-        """
-        This method is used to resolve the sizes of the files and folders.
-        Either get readable sizes or get nan values.
-
-        :param size: Data to be resolved.
-        """
-        if size is not NONE:
-            size_readable, size_total = self._convert_bytes_to_readable_format(
-                size, ColorFormatting.COLORS, ColorFormatting.UNITS, Style.RESET_ALL,
-                function=self._color_format_string)
-        else:
-            size_readable, size_total = NONE, NONE
-        return size_readable, size_total
 
     def crawl_items(self, path: str, go_deep: bool):
         """
@@ -316,7 +301,7 @@ class FolderCrawler:
         return container[filter_]
 
     @staticmethod
-    def _get_ints_from_str_dataframe_column(container, column) -> pd.Series:
+    def _get_ints_from_str_dataframe_column(container: pd.DataFrame, column: str) -> pd.Series:
         """
         This method is used to extract integers from the strings in a column of a given dataframe.
 
@@ -549,7 +534,7 @@ class FolderCrawler:
                                           colors: list[str],
                                           units: list[str],
                                           reset_formatting: str,
-                                          function) -> tuple[str, str]:
+                                          function) -> tuple[str, str] | tuple[float, float]:
         """
         This private method is used to convert the size from bytes to a more readable format.
         The sizes are returned as strings with the color formatting and the unit.
@@ -560,6 +545,8 @@ class FolderCrawler:
         :param reset_formatting: Resetting str sequence to return formatting back to default.
         :param function: Function that is used to format the item with the given color and reset formatting.
         """
+        if size is NONE:
+            return NONE, NONE
 
         size_adjusted = size
         for color, unit in zip(colors, units):
@@ -574,17 +561,22 @@ class FolderCrawler:
     def _color_format_string(*args) -> str:
         """
         This method is used to format the item with the given color and reset formatting.
-        Since it is planned to use as an argument in other methods, I decided to use *args.
+        Since it is planned to use this method as an argument in other methods, I decided to use *args here.
+        Currently, after unpacking we expect:
+        color, size, unit, reset_formatting, format_long, *_ = args
+        where *_ is the rest of the arguments that are not used.
         """
-        # We are expecting only 5 arguments, therefore discard the rest with *_
-        color, number, unit, reset_formatting, format_long, *_ = args
+        color, size, unit, reset_formatting, format_long, *_ = args
 
         if format_long:
-            # long number
-            return f"{color} {number} {reset_formatting}"
+            # LONG NUMBER (The bytes in their original digit form are kept the same here)
+            # The spaces around the size are here as a separator for splitting into array.
+            # Example: colorFormating 1024 resetFormatting
+            return f"{color} {size} {reset_formatting}"
         else:
-            # transformed to short number
-            return f"{color}{number:.2f}{unit}{reset_formatting}"
+            # TRANSFORMED TO SHORT NUMBER
+            # Example: colorFormating1.00KBresetFormatting
+            return f"{color}{size:.2f}{unit}{reset_formatting}"
 
     @staticmethod
     def _format_timestamp(seconds: float) -> str:
