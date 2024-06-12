@@ -22,7 +22,7 @@ CURRENT_DIRECTORY = "."
 TEST_DICT = {
     COLUMN_NAMES[0]: ['C:/Users', 'C:/Users/Subfolder', 'C:/Users/Subfolder/Subfolder2'],
     COLUMN_NAMES[1]: [datetime.datetime(2022, 1, 1), datetime.datetime(2022, 2, 1), datetime.datetime(2022, 3, 1)],
-    COLUMN_NAMES[2]: [ColoredBytes.ONE_KB_PRETTY, ColoredBytes.TWO_KB_PRETTY, ColoredBytes.THREE_KB_PRETTY],
+    COLUMN_NAMES[2]: [ColoredBytes.ONE_KB_READABLE, ColoredBytes.TWO_KB_READABLE, ColoredBytes.THREE_KB_READABLE],
     COLUMN_NAMES[3]: [ColoredBytes.ONE_KB_RAW, ColoredBytes.TWO_KB_RAW, ColoredBytes.THREE_KB_RAW]
 }
 TEST_DATAFRAME = pd.DataFrame(TEST_DICT)
@@ -216,19 +216,20 @@ class FolderCrawlerTestsLoadCrawledData(unittest.TestCase):
         pd.testing.assert_frame_equal(result, expected_df)
 
     def test_load_crawled_data_with_non_empty_container(self):
-        result = FolderCrawler.load_crawled_data(TEST_DATAFRAME, ItemType.FILES, SavedCrawls.ROOT, SavedCrawls.EXTENSION)
+        result = FolderCrawler.load_crawled_data(TEST_DATAFRAME, ItemType.FILES, SavedCrawls.ROOT,
+                                                 SavedCrawls.EXTENSION)
         pd.testing.assert_frame_equal(result, TEST_DATAFRAME)
 
 
 class FolderCrawlerTestsGetCrawlSummary(unittest.TestCase):
     def test_summary_with_total_size(self):
-        result = FolderCrawler._get_crawl_summary(True, Messages.NR_OF_CRAWLED_DATA, ColoredBytes.ONE_KB_PRETTY,
+        result = FolderCrawler._get_crawl_summary(True, Messages.NR_OF_CRAWLED_DATA, ColoredBytes.ONE_KB_READABLE,
                                                   ColoredBytes.ONE_KB_RAW)
-        expected_summary = (Messages.NR_OF_CRAWLED_DATA, ColoredBytes.ONE_KB_PRETTY, ColoredBytes.ONE_KB_RAW, "\n\n")
+        expected_summary = (Messages.NR_OF_CRAWLED_DATA, ColoredBytes.ONE_KB_READABLE, ColoredBytes.ONE_KB_RAW, "\n\n")
         self.assertEqual(result, expected_summary)
 
     def test_summary_without_total_size(self):
-        result = FolderCrawler._get_crawl_summary(False, Messages.NR_OF_CRAWLED_DATA, ColoredBytes.ONE_KB_PRETTY,
+        result = FolderCrawler._get_crawl_summary(False, Messages.NR_OF_CRAWLED_DATA, ColoredBytes.ONE_KB_READABLE,
                                                   ColoredBytes.ONE_KB_RAW)
         expected_summary = ("\n",)
         self.assertEqual(result, expected_summary)
@@ -285,149 +286,215 @@ class FolderCrawlerTestsGetCrawledData(unittest.TestCase):
 
 class FolderCrawlerTestsCrawlShallow(unittest.TestCase):
     def setUp(self):
-        self.folder_crawler = FolderCrawler(path=CURRENT_DIRECTORY)
+        self.fc = FolderCrawler(path=CURRENT_DIRECTORY)
 
     def test_shallow_crawl_with_no_subdirectories(self):
         os.mkdir(TEMP_DIR)
-        result = FolderCrawler._crawl_shallow(TEMP_DIR)
+        result = self.fc._crawl_shallow(TEMP_DIR)
         os.rmdir(TEMP_DIR)
-        self.assertEqual(len(result), 0)
+        NR_OF_FOUND_ITEMS_EXPECTED = 0
+
+        self.assertEqual(len(result), NR_OF_FOUND_ITEMS_EXPECTED)
 
     def test_shallow_crawl_with_one_subdirectory(self):
-        os.mkdir(TEMP_DIR)
-        os.mkdir(os.path.join(TEMP_DIR, SUB_DIR_1))
-        result = FolderCrawler._crawl_shallow(TEMP_DIR)
-        os.rmdir(os.path.join(TEMP_DIR, SUB_DIR_1))
-        os.rmdir(TEMP_DIR)
-        self.assertEqual(len(result), 1)
+        # Prepare the test environment
+        test_helper = TestHelper(TEMP_DIR,
+                                 os.path.join(TEMP_DIR, SUB_DIR_1))
+        test_helper.create_test_paths(TEST_TEXT)
+
+        # Run test
+        result = self.fc._crawl_shallow(TEMP_DIR)
+
+        # Clean up the test environment
+        test_helper.delete_test_paths()
+
+        # Evaluate
+        NR_OF_FOUND_ITEMS_EXPECTED = 1
+        self.assertEqual(len(result), NR_OF_FOUND_ITEMS_EXPECTED)
 
     def test_shallow_crawl_with_multiple_subdirectories(self):
-        os.mkdir(TEMP_DIR)
-        os.mkdir(os.path.join(TEMP_DIR, SUB_DIR_1))
-        os.mkdir(os.path.join(TEMP_DIR, SUB_DIR_2))
-        result = FolderCrawler._crawl_shallow(TEMP_DIR)
-        os.rmdir(os.path.join(TEMP_DIR, SUB_DIR_1))
-        os.rmdir(os.path.join(TEMP_DIR, SUB_DIR_2))
-        os.rmdir(TEMP_DIR)
-        self.assertEqual(len(result), 2)
+        # Prepare the test environment
+        test_helper = TestHelper(TEMP_DIR,
+                                 os.path.join(TEMP_DIR, SUB_DIR_1),
+                                 os.path.join(TEMP_DIR, SUB_DIR_2))
+        test_helper.create_test_paths(TEST_TEXT)
+
+        # Run test
+        result = self.fc._crawl_shallow(TEMP_DIR)
+
+        # Clean up the test environment
+        test_helper.delete_test_paths()
+
+        # Evaluate
+        NR_OF_FOUND_ITEMS_EXPECTED = 2
+        self.assertEqual(len(result), NR_OF_FOUND_ITEMS_EXPECTED)
 
     def test_shallow_crawl_with_no_subdirectories_and_files(self):
-        os.mkdir(TEMP_DIR)
-        with open(os.path.join(TEMP_DIR, TEMP_FILE_1), FileOps.WRITE_MODE) as f:
-            f.write(TEST_TEXT)
-        result = FolderCrawler._crawl_shallow(TEMP_DIR)
-        os.remove(os.path.join(TEMP_DIR, TEMP_FILE_1))
-        os.rmdir(TEMP_DIR)
-        self.assertEqual(len(result), 1)
+        # Prepare the test environment
+        test_helper = TestHelper(TEMP_DIR,
+                                 os.path.join(TEMP_DIR, TEMP_FILE_1))
+        test_helper.create_test_paths(TEST_TEXT)
+
+        # Run test
+        result = self.fc._crawl_shallow(TEMP_DIR)
+
+        # Clean up the test environment
+        test_helper.delete_test_paths()
+
+        # Evaluate
+        NR_OF_FOUND_ITEMS_EXPECTED = 1
+        self.assertEqual(len(result), NR_OF_FOUND_ITEMS_EXPECTED)
 
     def test_shallow_crawl_with_one_subdirectory_and_files(self):
-        os.mkdir(TEMP_DIR)
-        os.mkdir(os.path.join(TEMP_DIR, SUB_DIR_1))
-        with open(os.path.join(TEMP_DIR, SUB_DIR_1, TEMP_FILE_1), FileOps.WRITE_MODE) as f:
-            f.write(TEST_TEXT)
-        result = FolderCrawler._crawl_shallow(TEMP_DIR)
-        os.remove(os.path.join(TEMP_DIR, SUB_DIR_1, TEMP_FILE_1))
-        os.rmdir(os.path.join(TEMP_DIR, SUB_DIR_1))
-        os.rmdir(TEMP_DIR)
-        self.assertEqual(len(result), 1)
+        # Prepare the test environment
+        test_helper = TestHelper(TEMP_DIR,
+                                 os.path.join(TEMP_DIR, SUB_DIR_1),
+                                 os.path.join(TEMP_DIR, SUB_DIR_1, TEMP_FILE_1))
+        test_helper.create_test_paths(TEST_TEXT)
+
+        # Run test
+        result = self.fc._crawl_shallow(TEMP_DIR)
+
+        # Clean up the test environment
+        test_helper.delete_test_paths()
+
+        # Evaluate
+        NR_OF_FOUND_ITEMS_EXPECTED = 1
+        self.assertEqual(len(result), NR_OF_FOUND_ITEMS_EXPECTED)
 
     def test_shallow_crawl_with_multiple_subdirectories_and_files(self):
-        os.mkdir(TEMP_DIR)
-        os.mkdir(os.path.join(TEMP_DIR, SUB_DIR_1))
-        os.mkdir(os.path.join(TEMP_DIR, SUB_DIR_2))
+        # Prepare the test environment
+        test_helper = TestHelper(TEMP_DIR,
+                                 os.path.join(TEMP_DIR, SUB_DIR_1),
+                                 os.path.join(TEMP_DIR, SUB_DIR_2),
+                                 os.path.join(TEMP_DIR, SUB_DIR_1, TEMP_FILE_1),
+                                 os.path.join(TEMP_DIR, SUB_DIR_2, TEMP_FILE_2))
+        test_helper.create_test_paths(TEST_TEXT)
 
-        with open(os.path.join(TEMP_DIR, SUB_DIR_1, TEMP_FILE_1), FileOps.WRITE_MODE) as f:
-            f.write(TEST_TEXT)
-        with open(os.path.join(TEMP_DIR, SUB_DIR_2, TEMP_FILE_2), FileOps.WRITE_MODE) as f:
-            f.write(TEST_TEXT)
-        result = FolderCrawler._crawl_shallow(TEMP_DIR)
-        os.remove(os.path.join(TEMP_DIR, SUB_DIR_1, TEMP_FILE_1))
-        os.remove(os.path.join(TEMP_DIR, SUB_DIR_2, TEMP_FILE_2))
-        os.rmdir(os.path.join(TEMP_DIR, SUB_DIR_1))
-        os.rmdir(os.path.join(TEMP_DIR, SUB_DIR_2))
-        os.rmdir(TEMP_DIR)
-        self.assertEqual(len(result), 2)
+        # Run test
+        result = self.fc._crawl_shallow(TEMP_DIR)
+
+        # Clean up the test environment
+        test_helper.delete_test_paths()
+
+        # Evaluate
+        NR_OF_FOUND_ITEMS_EXPECTED = 2
+        self.assertEqual(len(result), NR_OF_FOUND_ITEMS_EXPECTED)
 
     def test_shallow_crawl_with_multiple_subdirectories_and_files_2(self):
-        os.mkdir(TEMP_DIR)
-        os.mkdir(os.path.join(TEMP_DIR, SUB_DIR_1))
-        os.mkdir(os.path.join(TEMP_DIR, SUB_DIR_2))
-        with open(os.path.join(TEMP_DIR, TEMP_FILE_1), FileOps.WRITE_MODE) as f:
-            f.write(TEST_TEXT)
-        with open(os.path.join(TEMP_DIR, TEMP_FILE_2), FileOps.WRITE_MODE) as f:
-            f.write(TEST_TEXT)
-        result = FolderCrawler._crawl_shallow(TEMP_DIR)
-        os.remove(os.path.join(TEMP_DIR, TEMP_FILE_1))
-        os.remove(os.path.join(TEMP_DIR, TEMP_FILE_2))
-        os.rmdir(os.path.join(TEMP_DIR, SUB_DIR_1))
-        os.rmdir(os.path.join(TEMP_DIR, SUB_DIR_2))
-        os.rmdir(TEMP_DIR)
-        self.assertEqual(len(result), 4)
+        # Prepare the test environment
+        test_helper = TestHelper(TEMP_DIR,
+                                 os.path.join(TEMP_DIR, SUB_DIR_1),
+                                 os.path.join(TEMP_DIR, SUB_DIR_2),
+                                 os.path.join(TEMP_DIR, TEMP_FILE_1),
+                                 os.path.join(TEMP_DIR, TEMP_FILE_2))
+        test_helper.create_test_paths(TEST_TEXT)
+
+        # Run test
+        result = self.fc._crawl_shallow(TEMP_DIR)
+
+        # Clean up the test environment
+        test_helper.delete_test_paths()
+
+        # Evaluate
+        NR_OF_FOUND_ITEMS_EXPECTED = 4
+        self.assertEqual(len(result), NR_OF_FOUND_ITEMS_EXPECTED)
 
 
 class FolderCrawlerTestsCrawlDeep(unittest.TestCase):
     def setUp(self):
-        self.folder_crawler = FolderCrawler(path=CURRENT_DIRECTORY)
+        self.fc = FolderCrawler(path=CURRENT_DIRECTORY)
 
     def test_crawl_deep_with_no_subdirectories(self):
         os.mkdir(TEMP_DIR)
-        result = FolderCrawler._crawl_deep(TEMP_DIR)
+        result = self.fc._crawl_deep(TEMP_DIR)
         os.rmdir(TEMP_DIR)
-        self.assertEqual(len(result), 0)
+        NR_OF_FOUND_ITEMS_EXPECTED = 0
+        self.assertEqual(len(result), NR_OF_FOUND_ITEMS_EXPECTED)
 
     def test_crawl_deep_with_one_subdirectory(self):
-        os.mkdir(TEMP_DIR)
-        os.mkdir(os.path.join(TEMP_DIR, SUB_DIR_1))
-        result = FolderCrawler._crawl_deep(TEMP_DIR)
-        os.rmdir(os.path.join(TEMP_DIR, SUB_DIR_1))
-        os.rmdir(TEMP_DIR)
-        self.assertEqual(len(result), 1)
+        # Prepare the test environment
+        test_helper = TestHelper(TEMP_DIR, os.path.join(TEMP_DIR, SUB_DIR_1))
+        test_helper.create_test_paths(TEST_TEXT)
+
+        # Run test
+        result = self.fc._crawl_deep(TEMP_DIR)
+
+        # Clean up the test environment
+        test_helper.delete_test_paths()
+
+        # Evaluate
+        NR_OF_FOUND_ITEMS_EXPECTED = 1
+        self.assertEqual(len(result), NR_OF_FOUND_ITEMS_EXPECTED)
 
     def test_crawl_deep_with_multiple_subdirectories(self):
-        os.mkdir(TEMP_DIR)
-        os.mkdir(os.path.join(TEMP_DIR, SUB_DIR_1))
-        os.mkdir(os.path.join(TEMP_DIR, SUB_DIR_2))
-        result = FolderCrawler._crawl_deep(TEMP_DIR)
-        os.rmdir(os.path.join(TEMP_DIR, SUB_DIR_1))
-        os.rmdir(os.path.join(TEMP_DIR, SUB_DIR_2))
-        os.rmdir(TEMP_DIR)
-        self.assertEqual(len(result), 2)
+        # Prepare the test environment
+        test_helper = TestHelper(TEMP_DIR,
+                                 os.path.join(TEMP_DIR, SUB_DIR_1),
+                                 os.path.join(TEMP_DIR, SUB_DIR_2))
+        test_helper.create_test_paths(TEST_TEXT)
+
+        # Run test
+        result = self.fc._crawl_deep(TEMP_DIR)
+
+        # Clean up the test environment
+        test_helper.delete_test_paths()
+
+        # Evaluate
+        NR_OF_FOUND_ITEMS_EXPECTED = 2
+        self.assertEqual(len(result), NR_OF_FOUND_ITEMS_EXPECTED)
 
     def test_crawl_deep_with_no_subdirectories_and_files(self):
-        os.mkdir(TEMP_DIR)
-        with open(os.path.join(TEMP_DIR, TEMP_FILE_1), FileOps.WRITE_MODE) as f:
-            f.write(TEST_TEXT)
-        result = FolderCrawler._crawl_deep(TEMP_DIR)
-        os.remove(os.path.join(TEMP_DIR, TEMP_FILE_1))
-        os.rmdir(TEMP_DIR)
-        self.assertEqual(len(result), 1)
+        # Prepare the test environment
+        test_helper = TestHelper(TEMP_DIR,
+                                 os.path.join(TEMP_DIR, TEMP_FILE_1))
+        test_helper.create_test_paths(TEST_TEXT)
+
+        # Run test
+        result = self.fc._crawl_deep(TEMP_DIR)
+
+        # Clean up the test environment
+        test_helper.delete_test_paths()
+
+        # Evaluate
+        NR_OF_FOUND_ITEMS_EXPECTED = 1
+        self.assertEqual(len(result), NR_OF_FOUND_ITEMS_EXPECTED)
 
     def test_crawl_deep_with_one_subdirectory_and_files(self):
-        os.mkdir(TEMP_DIR)
-        os.mkdir(os.path.join(TEMP_DIR, SUB_DIR_1))
-        with open(os.path.join(TEMP_DIR, SUB_DIR_1, TEMP_FILE_1), FileOps.WRITE_MODE) as f:
-            f.write(TEST_TEXT)
-        result = FolderCrawler._crawl_deep(TEMP_DIR)
-        os.remove(os.path.join(TEMP_DIR, SUB_DIR_1, TEMP_FILE_1))
-        os.rmdir(os.path.join(TEMP_DIR, SUB_DIR_1))
-        os.rmdir(TEMP_DIR)
-        self.assertEqual(len(result), 2)
+        # Prepare the test environment
+        test_helper = TestHelper(TEMP_DIR,
+                                 os.path.join(TEMP_DIR, SUB_DIR_1),
+                                 os.path.join(TEMP_DIR, SUB_DIR_1, TEMP_FILE_1))
+        test_helper.create_test_paths(TEST_TEXT)
+
+        # Run test
+        result = self.fc._crawl_deep(TEMP_DIR)
+
+        # Clean up the test environment
+        test_helper.delete_test_paths()
+
+        # Evaluate
+        NR_OF_FOUND_ITEMS_EXPECTED = 2
+        self.assertEqual(len(result), NR_OF_FOUND_ITEMS_EXPECTED)
 
     def test_crawl_deep_with_multiple_subdirectories_and_files(self):
-        os.mkdir(TEMP_DIR)
-        os.mkdir(os.path.join(TEMP_DIR, SUB_DIR_1))
-        os.mkdir(os.path.join(TEMP_DIR, SUB_DIR_2))
-        with open(os.path.join(TEMP_DIR, SUB_DIR_1, TEMP_FILE_1), FileOps.WRITE_MODE) as f:
-            f.write(TEST_TEXT)
-        with open(os.path.join(TEMP_DIR, SUB_DIR_2, TEMP_FILE_2), FileOps.WRITE_MODE) as f:
-            f.write(TEST_TEXT)
-        result = FolderCrawler._crawl_deep(TEMP_DIR)
-        os.remove(os.path.join(TEMP_DIR, SUB_DIR_1, TEMP_FILE_1))
-        os.remove(os.path.join(TEMP_DIR, SUB_DIR_2, TEMP_FILE_2))
-        os.rmdir(os.path.join(TEMP_DIR, SUB_DIR_1))
-        os.rmdir(os.path.join(TEMP_DIR, SUB_DIR_2))
-        os.rmdir(TEMP_DIR)
-        self.assertEqual(len(result), 4)
+        # Prepare the test environment
+        test_helper = TestHelper(TEMP_DIR,
+                                 os.path.join(TEMP_DIR, SUB_DIR_1),
+                                 os.path.join(TEMP_DIR, SUB_DIR_2),
+                                 os.path.join(TEMP_DIR, SUB_DIR_1, TEMP_FILE_1),
+                                 os.path.join(TEMP_DIR, SUB_DIR_2, TEMP_FILE_2))
+        test_helper.create_test_paths(TEST_TEXT)
+
+        # Run test
+        result = self.fc._crawl_deep(TEMP_DIR)
+
+        # Clean up the test environment
+        test_helper.delete_test_paths()
+
+        # Evaluate
+        NR_OF_FOUND_ITEMS_EXPECTED = 4
+        self.assertEqual(len(result), NR_OF_FOUND_ITEMS_EXPECTED)
 
 
 class FolderCrawlerTestsSaveCrawlResults(unittest.TestCase):
@@ -578,7 +645,7 @@ class FolderCrawlerTestsColorFormatString(unittest.TestCase):
         size = 1
         args = Fore.YELLOW, size, ByteUnit.KILOBYTE, Style.RESET_ALL, False
         result = self.fc._color_format_string(*args)
-        self.assertEqual(result, ColoredBytes.ONE_KB_PRETTY)
+        self.assertEqual(result, ColoredBytes.ONE_KB_READABLE)
 
     def test_color_format_string_long(self):
         args = Fore.YELLOW, ByteSize.KILOBYTE, None, Style.RESET_ALL, True

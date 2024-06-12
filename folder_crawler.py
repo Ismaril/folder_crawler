@@ -223,9 +223,9 @@ class FolderCrawler:
         if not item_type == ItemType.SKIPPED:
             print_summary = not (crawl_deep and item_type == ItemType.FOLDERS)
             sum_of_bytes = path_sizes.astype(np.int64).sum()
-            size_short, size_long = self._convert_bytes_to_readable_format(
+            size_readable, size_raw = self._convert_bytes_to_readable_format(
                 sum_of_bytes, ColorFormatting.COLORS, ColorFormatting.UNITS, Style.RESET_ALL, self._color_format_string)
-            print(*self._get_crawl_summary(print_summary, Messages.NR_OF_CRAWLED_DATA, size_short, size_long))
+            print(*self._get_crawl_summary(print_summary, Messages.NR_OF_CRAWLED_DATA, size_readable, size_raw))
 
     def _global_dataframe_filter(self, container: pd.DataFrame, filter_date: datetime.datetime,
                                  filter_date_sign: str, filter_path: str, filter_size: int,
@@ -329,17 +329,17 @@ class FolderCrawler:
         return container
 
     @staticmethod
-    def _get_crawl_summary(print_: bool, message: str, size_short: str | int, size_long: str | int) -> tuple:
+    def _get_crawl_summary(print_: bool, message: str, size_readable: str | int, size_raw: str | int) -> tuple:
         """
         This method is used to print the summary of the crawled data.
 
         :param print_: A boolean value that determines whether to print the summary or not.
         :param message: The message that is printed.
-        :param size_short: The short size that is printed.
-        :param size_long: The long size that is printed.
+        :param size_readable: The size readable which that is printed.
+        :param size_raw: The raw size that is printed.
         """
         if print_:
-            return message, size_short, size_long, "\n\n"
+            return message, size_readable, size_raw, "\n\n"
         else:
             return "\n",
 
@@ -551,10 +551,10 @@ class FolderCrawler:
         size_adjusted = size
         for color, unit in zip(colors, units):
             if size_adjusted < ByteSize.KILOBYTE:
-                size_short = function(*(color, size_adjusted, unit, reset_formatting, False))
-                size_long = function(*(color, size, None, reset_formatting, True))
+                size_readable = function(*(color, size_adjusted, unit, reset_formatting, False))
+                size_raw = function(*(color, size, None, reset_formatting, True))
 
-                return size_short, size_long
+                return size_readable, size_raw
             size_adjusted /= ByteSize.KILOBYTE
 
     @staticmethod
