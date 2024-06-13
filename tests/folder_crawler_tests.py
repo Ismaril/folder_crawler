@@ -8,7 +8,7 @@ from tabulate import tabulate
 from colorama import Style, Fore
 from test_helper import TestHelper
 from folder_crawler import FolderCrawler, NONE, COLUMN_NAMES, TABLE_HEADER, TABLE_FORMAT
-from structures import SavedCrawls, Messages, ColorFormatting, ByteSize, ItemType, FileOps, ByteUnit, ColoredBytes
+from structures import SavedCrawls, Messages, ColorFormatting, ByteSize, ItemType, ByteUnit, ColoredBytes
 
 # region constants
 TEMP_DIR = "temp_dir"
@@ -17,6 +17,7 @@ SUB_DIR_2 = "sub_dir2"
 TEMP_FILE_1 = "temp_file1.txt"
 TEMP_FILE_2 = "temp_file2.txt"
 TEST_TEXT = "This is a temporary file for testing."
+NOT_EXISTING_FILE = 'non_existing_file.txt'
 CURRENT_DIRECTORY = "."
 
 TEST_DICT = {
@@ -237,24 +238,24 @@ class FolderCrawlerTestsGetCrawlSummary(unittest.TestCase):
 
 class FolderCrawlerTestsFilterData(unittest.TestCase):
     def setUp(self):
-        self.folder_crawler = FolderCrawler(path=CURRENT_DIRECTORY)
+        self.fc = FolderCrawler(path=CURRENT_DIRECTORY)
 
     def test_filter_data_with_nan_values(self):
-        files = pd.DataFrame({COLUMN_NAMES[0]: ['file1', 'file2'], 'Changed': ['change1', NONE]})
-        folders = pd.DataFrame({COLUMN_NAMES[0]: ['folder1', 'folder2'], 'Changed': ['change1', NONE]})
-        empty_dataframe = {COLUMN_NAMES[0]: [], 'Changed': []}
-        column = 'Changed'
-        files, folders, skipped = FolderCrawler._filter_data(files, folders, empty_dataframe, column)
+        files = pd.DataFrame({COLUMN_NAMES[0]: ['file1', 'file2'], COLUMN_NAMES[1]: ['change1', NONE]})
+        folders = pd.DataFrame({COLUMN_NAMES[0]: ['folder1', 'folder2'], COLUMN_NAMES[1]: ['change1', NONE]})
+        empty_dataframe = {COLUMN_NAMES[0]: [], COLUMN_NAMES[1]: []}
+        column = COLUMN_NAMES[1]
+        files, folders, skipped = self.fc._filter_data(files, folders, empty_dataframe, column)
         self.assertEqual(len(files), 1)
         self.assertEqual(len(folders), 1)
         self.assertEqual(len(skipped), 2)
 
     def test_filter_data_without_nan_values(self):
-        files = pd.DataFrame({COLUMN_NAMES[0]: ['file1', 'file2'], 'Changed': ['change1', 'change2']})
-        folders = pd.DataFrame({COLUMN_NAMES[0]: ['folder1', 'folder2'], 'Changed': ['change1', 'change2']})
-        empty_dataframe = {COLUMN_NAMES[0]: [], 'Changed': []}
-        column = 'Changed'
-        files, folders, skipped = FolderCrawler._filter_data(files, folders, empty_dataframe, column)
+        files = pd.DataFrame({COLUMN_NAMES[0]: ['file1', 'file2'], COLUMN_NAMES[1]: ['change1', 'change2']})
+        folders = pd.DataFrame({COLUMN_NAMES[0]: ['folder1', 'folder2'], COLUMN_NAMES[1]: ['change1', 'change2']})
+        empty_dataframe = {COLUMN_NAMES[0]: [], COLUMN_NAMES[1]: []}
+        column = COLUMN_NAMES[1]
+        files, folders, skipped = self.fc._filter_data(files, folders, empty_dataframe, column)
         self.assertEqual(len(files), 2)
         self.assertEqual(len(folders), 2)
         self.assertEqual(len(skipped), 0)
@@ -521,60 +522,79 @@ class FolderCrawlerTestsSaveCrawlResults(unittest.TestCase):
 
 class FolderCrawlerTestsGetSizeOfItem(unittest.TestCase):
     def setUp(self):
-        self.folder_crawler = FolderCrawler(path=CURRENT_DIRECTORY)
+        self.fc = FolderCrawler(path=CURRENT_DIRECTORY)
 
     def test_size_of_existing_file(self):
-        with open(TEMP_FILE_1, FileOps.WRITE_MODE) as f:
-            f.write(TEST_TEXT)
-        result = FolderCrawler._get_size_of_item(TEMP_FILE_1, False)
-        os.remove(TEMP_FILE_1)
-        self.assertEqual(result, 37)
+        # Prepare the test environment
+        test_helper = TestHelper(TEMP_FILE_1)
+        test_helper.create_test_paths(TEST_TEXT)
+
+        # Run test
+        result = self.fc._get_size_of_item(TEMP_FILE_1, get_size_folder=False)
+
+        # Clean up the test environment
+        test_helper.delete_test_paths()
+
+        # Evaluate
+        SIZE_OF_FILE_EXPECTED = 37
+        self.assertEqual(result, SIZE_OF_FILE_EXPECTED)
 
     def test_size_of_non_existing_file(self):
-        result = FolderCrawler._get_size_of_item('non_existing_file.txt', False)
+        result = self.fc._get_size_of_item(NOT_EXISTING_FILE, get_size_folder=False)
         self.assertIs(result, NONE)
 
     def test_size_of_existing_directory(self):
-        os.mkdir(TEMP_DIR)
-        with open(os.path.join(TEMP_DIR, TEMP_FILE_1), FileOps.WRITE_MODE) as f:
-            f.write(TEST_TEXT)
-        result = FolderCrawler._get_size_of_item(TEMP_DIR, True)
-        os.remove(os.path.join(TEMP_DIR, TEMP_FILE_1))
-        os.rmdir(TEMP_DIR)
-        self.assertEqual(result, 37)
+        # Prepare the test environment
+        test_helper = TestHelper(TEMP_DIR, os.path.join(TEMP_DIR, TEMP_FILE_1))
+        test_helper.create_test_paths(TEST_TEXT)
+
+        # Run test
+        result = self.fc._get_size_of_item(TEMP_DIR, get_size_folder=True)
+
+        # Clean up the test environment
+        test_helper.delete_test_paths()
+
+        # Evaluate
+        SIZE_OF_FOLDER_EXPECTED = 37
+        self.assertEqual(result, SIZE_OF_FOLDER_EXPECTED)
 
 
 class FolderCrawlerTestsTabulateData(unittest.TestCase):
     def setUp(self):
-        self.folder_crawler = FolderCrawler(path=CURRENT_DIRECTORY)
+        self.fc = FolderCrawler(path=CURRENT_DIRECTORY)
 
     def test_tabulate_data_with_empty_dataframe(self):
-        df = pd.DataFrame()
-        result = FolderCrawler._tabulate_data(df)
-        expected = tabulate(df, headers=TABLE_HEADER, tablefmt=TABLE_FORMAT)
+        EMPTY_DATAFRAME = pd.DataFrame()
+        result = self.fc._tabulate_data(EMPTY_DATAFRAME)
+        expected = tabulate(EMPTY_DATAFRAME, headers=TABLE_HEADER, tablefmt=TABLE_FORMAT)
         self.assertEqual(result, expected)
 
     def test_tabulate_data_with_non_empty_dataframe(self):
-        data = {COLUMN_NAMES[0]: ['C:/Users', 'C:/Downloads', 'C:/Documents']}
-        df = pd.DataFrame(data)
-        result = FolderCrawler._tabulate_data(df)
-        expected = tabulate(df, headers=TABLE_HEADER, tablefmt=TABLE_FORMAT)
+        result = self.fc._tabulate_data(TEST_DATAFRAME)
+        expected = tabulate(TEST_DATAFRAME, headers=TABLE_HEADER, tablefmt=TABLE_FORMAT)
         self.assertEqual(result, expected)
 
 
 class FolderCrawlerTestsGetLastChangeOfItem(unittest.TestCase):
     def setUp(self):
-        self.folder_crawler = FolderCrawler(path=CURRENT_DIRECTORY)
+        self.fc = FolderCrawler(path=CURRENT_DIRECTORY)
 
     def test_last_change_of_existing_file(self):
-        with open(TEMP_FILE_1, FileOps.WRITE_MODE) as f:
-            f.write(TEST_TEXT)
-        result = FolderCrawler._get_last_change_of_item(TEMP_FILE_1)
-        os.remove(TEMP_FILE_1)
+        # Prepare the test environment
+        test_helper = TestHelper(TEMP_FILE_1)
+        test_helper.create_test_paths(TEST_TEXT)
+
+        # Run test
+        result = self.fc._get_last_change_of_item(TEMP_FILE_1)
+
+        # Clean up the test environment
+        test_helper.delete_test_paths()
+
+        # Evaluate
         self.assertIsInstance(result, datetime.datetime)
 
     def test_last_change_of_non_existing_file(self):
-        result = FolderCrawler._get_last_change_of_item('non_existing_file.txt')
+        result = self.fc._get_last_change_of_item(NOT_EXISTING_FILE)
         self.assertIs(result, NONE)
 
 
