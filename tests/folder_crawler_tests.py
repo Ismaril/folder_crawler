@@ -20,13 +20,12 @@ TEST_TEXT = "This is a temporary file for testing."
 NOT_EXISTING_FILE = 'non_existing_file.txt'
 CURRENT_DIRECTORY = "."
 
-TEST_DICT = {
+TEST_DATAFRAME = pd.DataFrame({
     COLUMN_NAMES[0]: ['C:/Users', 'C:/Users/Subfolder', 'C:/Users/Subfolder/Subfolder2'],
     COLUMN_NAMES[1]: [datetime.datetime(2022, 1, 1), datetime.datetime(2022, 2, 1), datetime.datetime(2022, 3, 1)],
     COLUMN_NAMES[2]: [ColoredBytes.ONE_KB_READABLE, ColoredBytes.TWO_KB_READABLE, ColoredBytes.THREE_KB_READABLE],
     COLUMN_NAMES[3]: [ColoredBytes.ONE_KB_RAW, ColoredBytes.TWO_KB_RAW, ColoredBytes.THREE_KB_RAW]
-}
-TEST_DATAFRAME = pd.DataFrame(TEST_DICT)
+})
 RAW_INTEGERS_SERIES = pd.Series([1024, 2048, 3072], dtype='int64', name=COLUMN_NAMES[3])
 
 
@@ -500,24 +499,25 @@ class FolderCrawlerTestsCrawlDeep(unittest.TestCase):
 
 class FolderCrawlerTestsSaveCrawlResults(unittest.TestCase):
     def setUp(self):
-        self.folder_crawler = FolderCrawler(path=CURRENT_DIRECTORY)
+        self.fc = FolderCrawler(path=CURRENT_DIRECTORY)
 
     def test_save_crawl_result_with_existing_path(self):
-        path = 'temp_file.csv'
-        data = {COLUMN_NAMES[0]: ['C:/Users', 'C:/Downloads', 'C:/Documents']}
-        df = pd.DataFrame(data)
-        df.to_csv(path, index=False)
-        FolderCrawler._save_result(path, df)
-        self.assertTrue(os.path.exists(path))
-        os.remove(path)
+        # Prepare the test environment
+        TEST_DATAFRAME.to_csv(TEMP_FILE_1, index=False)
+        # Run test
+        self.fc._save_result(TEMP_FILE_1, TEST_DATAFRAME)
+        # Evaluate
+        self.assertTrue(os.path.exists(TEMP_FILE_1))
+        # Clean up the test environment
+        os.remove(TEMP_FILE_1)
 
     def test_save_crawl_result_with_non_existing_path(self):
-        path = 'temp_file.csv'
-        data = {COLUMN_NAMES[0]: ['C:/Users', 'C:/Downloads', 'C:/Documents']}
-        df = pd.DataFrame(data)
-        FolderCrawler._save_result(path, df)
-        self.assertTrue(os.path.exists(path))
-        os.remove(path)
+        # Run test
+        self.fc._save_result(TEMP_FILE_1, TEST_DATAFRAME)
+        # Evaluate
+        self.assertTrue(os.path.exists(TEMP_FILE_1))
+        # Clean up the test environment
+        os.remove(TEMP_FILE_1)
 
 
 class FolderCrawlerTestsGetSizeOfItem(unittest.TestCase):
@@ -600,25 +600,38 @@ class FolderCrawlerTestsGetLastChangeOfItem(unittest.TestCase):
 
 class FolderCrawlerTestsFilterSubdirectories(unittest.TestCase):
     def setUp(self):
-        self.folder_crawler = FolderCrawler(path=CURRENT_DIRECTORY)
+        self.fc = FolderCrawler(path=CURRENT_DIRECTORY)
 
     def test_filter_subdirectories_with_no_subdirectories(self):
-        data = {COLUMN_NAMES[0]: ['C:/Users', 'C:/Downloads', 'C:/Documents']}
-        df = pd.DataFrame(data)
-        result = FolderCrawler._filter_subdirectories(df, COLUMN_NAMES[0])
-        self.assertEqual(len(result), 3)
+        # Prepare the test environment
+        # We do not have to use complete dataset with all columns. Just one column with paths is enough for this test.
+        PATHS_WITH_NO_SUBDIRS = {COLUMN_NAMES[0]: ['C:/Users', 'C:/Downloads', 'C:/Documents']}
+        df = pd.DataFrame(PATHS_WITH_NO_SUBDIRS)
+
+        # Run test
+        result = self.fc._filter_subdirectories(df, COLUMN_NAMES[0])
+
+        # Evaluate
+        NUMBER_OF_PATHS_EXPECTED = 3
+        self.assertEqual(len(result), NUMBER_OF_PATHS_EXPECTED)
 
     def test_filter_subdirectories_with_subdirectories(self):
-        data = {COLUMN_NAMES[0]: ['C:/Users', 'C:/Users/Subfolder', 'C:/Users/Subfolder/Subfolder2']}
-        df = pd.DataFrame(data)
-        result = FolderCrawler._filter_subdirectories(df, 'Path')
-        self.assertEqual(len(result), 1)
+        result = self.fc._filter_subdirectories(TEST_DATAFRAME, COLUMN_NAMES[0])
+        NUMBER_OF_PATHS_EXPECTED = 1
+        self.assertEqual(len(result), NUMBER_OF_PATHS_EXPECTED)
 
     def test_filter_subdirectories_with_mixed_paths(self):
-        data = {COLUMN_NAMES[0]: ['C:/Users', 'C:/Users/Subfolder', 'C:/Downloads']}
-        df = pd.DataFrame(data)
-        result = FolderCrawler._filter_subdirectories(df, COLUMN_NAMES[0])
-        self.assertEqual(len(result), 2)
+        # Prepare the test environment
+        # We do not have to use complete dataset with all columns. Just one column with paths is enough for this test.
+        MIXED_PATHS = {COLUMN_NAMES[0]: ['C:/Users', 'C:/Users/Subfolder', 'C:/Downloads']}
+        df = pd.DataFrame(MIXED_PATHS)
+
+        # Run test
+        result = self.fc._filter_subdirectories(df, COLUMN_NAMES[0])
+
+        # Evaluate
+        NUMBER_OF_PATHS_EXPECTED = 2
+        self.assertEqual(len(result), NUMBER_OF_PATHS_EXPECTED)
 
 
 class FolderCrawlerTestsGetTimePerformance(unittest.TestCase):
