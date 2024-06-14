@@ -27,9 +27,11 @@ TEST_DATAFRAME = pd.DataFrame({
     COLUMN_NAMES[3]: [ColoredBytes.ONE_KB_RAW, ColoredBytes.TWO_KB_RAW, ColoredBytes.THREE_KB_RAW]
 })
 RAW_INTEGERS_SERIES = pd.Series([1024, 2048, 3072], dtype='int64', name=COLUMN_NAMES[3])
+EMPTY_DATAFRAME = pd.DataFrame()
 
 
 # endregion
+
 
 # region Integration tests
 class FolderCrawlerTestsMain(unittest.TestCase):
@@ -94,14 +96,14 @@ class FolderCrawlerTestsGetPathWithProperties(unittest.TestCase):
         # Prepare the test environment
         test_helper = TestHelper(TEMP_DIR, os.path.join(TEMP_DIR, TEMP_FILE_1))
         test_helper.create_test_paths(TEST_TEXT)
-        IS_DIRECTORY = True
+        is_directory = True
 
         # Run test
-        result_tuple = self.fc._get_path_with_properties((TEMP_DIR, IS_DIRECTORY))
+        result_tuple = self.fc._get_path_with_properties((TEMP_DIR, is_directory))
         nr_of_properties = len(result_tuple[0])
         is_directory_ = result_tuple[1]
         resulting_tuple = (nr_of_properties, is_directory_)
-        expected_tuple = (len(COLUMN_NAMES), IS_DIRECTORY)
+        expected_tuple = (len(COLUMN_NAMES), is_directory)
 
         # Clean up the test environment
         test_helper.delete_test_paths()
@@ -147,55 +149,52 @@ class FolderCrawlerTestsFilterPath(unittest.TestCase):
     def test_filter_paths_with_matching_substring(self):
         FILTER_PATH = 'Users'
         result = FolderCrawler._filter_paths(TEST_DATAFRAME, FILTER_PATH, COLUMN_NAMES[0])
-        EXPECTED_NUMBER_OF_FILTERED_PATHS = 3
-
-        self.assertEqual(len(result), EXPECTED_NUMBER_OF_FILTERED_PATHS)
+        expected_number_of_filtered_paths = 3
+        self.assertEqual(len(result), expected_number_of_filtered_paths)
 
     def test_filter_paths_with_no_matching_substring(self):
         FILTER_PATH = 'nonexistent'
         result = FolderCrawler._filter_paths(TEST_DATAFRAME, FILTER_PATH, COLUMN_NAMES[0])
-        EXPECTED_NUMBER_OF_FILTERED_PATHS = 0
-
-        self.assertEqual(len(result), EXPECTED_NUMBER_OF_FILTERED_PATHS)
+        expected_number_of_filtered_paths = 0
+        self.assertEqual(len(result), expected_number_of_filtered_paths)
 
 
 class FolderCrawlerTestsFilterSizes(unittest.TestCase):
+    def setUp(self):
+        self.fc = FolderCrawler(path=CURRENT_DIRECTORY)
 
     def test_filter_sizes_greater_than_equal(self):
-        result = FolderCrawler._filter_sizes(TEST_DATAFRAME, ByteSize.KILOBYTE, ">=", RAW_INTEGERS_SERIES)
-        EXPECTED_NUMBER_OF_FILTERED_INTEGERS = 3
+        result = self.fc._filter_sizes(TEST_DATAFRAME, ByteSize.KILOBYTE, ">=", RAW_INTEGERS_SERIES)
+        expected_number_of_filtered_integers = 3
 
-        self.assertEqual(len(result), EXPECTED_NUMBER_OF_FILTERED_INTEGERS)
+        self.assertEqual(len(result), expected_number_of_filtered_integers)
 
     def test_filter_sizes_less_than_equal(self):
-        result = FolderCrawler._filter_sizes(TEST_DATAFRAME, ByteSize.KILOBYTE, "<=", RAW_INTEGERS_SERIES)
-        EXPECTED_NUMBER_OF_FILTERED_INTEGERS = 1
+        result = self.fc._filter_sizes(TEST_DATAFRAME, ByteSize.KILOBYTE, "<=", RAW_INTEGERS_SERIES)
+        expected_number_of_filtered_integers = 1
 
-        self.assertEqual(len(result), EXPECTED_NUMBER_OF_FILTERED_INTEGERS)
+        self.assertEqual(len(result), expected_number_of_filtered_integers)
 
 
 class FolderCrawlerTestsFilterLastChange(unittest.TestCase):
     def setUp(self):
         self.folder_crawler = FolderCrawler(path=CURRENT_DIRECTORY)
+        self.FILTER_DATE = datetime.datetime(2022, 1, 1)
 
     def test_filter_last_change_greater_than_equal(self):
-        FILTER_DATE = datetime.datetime(2022, 1, 1)
-        result = FolderCrawler._filter_last_change(TEST_DATAFRAME, FILTER_DATE, ">=", COLUMN_NAMES[1])
-        EXPECTED_NUMBER_OF_FILTERED_DATES = 3
-
-        self.assertEqual(len(result), EXPECTED_NUMBER_OF_FILTERED_DATES)
+        result = FolderCrawler._filter_last_change(TEST_DATAFRAME, self.FILTER_DATE, ">=", COLUMN_NAMES[1])
+        expected_number_of_filtered_dates = 3
+        self.assertEqual(len(result), expected_number_of_filtered_dates)
 
     def test_filter_last_change_less_than_equal(self):
-        FILTER_DATE = datetime.datetime(2022, 1, 1)
-        result = FolderCrawler._filter_last_change(TEST_DATAFRAME, FILTER_DATE, "<=", COLUMN_NAMES[1])
-        EXPECTED_NUMBER_OF_FILTERED_DATES = 1
-
-        self.assertEqual(len(result), EXPECTED_NUMBER_OF_FILTERED_DATES)
+        result = FolderCrawler._filter_last_change(TEST_DATAFRAME, self.FILTER_DATE, "<=", COLUMN_NAMES[1])
+        expected_number_of_filtered_dates = 1
+        self.assertEqual(len(result), expected_number_of_filtered_dates)
 
 
 class FolderCrawlerTestsLoadCrawledData(unittest.TestCase):
     def setUp(self):
-        self.folder_crawler = FolderCrawler(path=CURRENT_DIRECTORY)
+        self.fc = FolderCrawler(path=CURRENT_DIRECTORY)
 
     def test_load_crawled_data_with_empty_container(self):
         # Prepare the test environment
@@ -207,7 +206,7 @@ class FolderCrawlerTestsLoadCrawledData(unittest.TestCase):
         expected_df = pd.read_csv(expected_path)
 
         # Run test
-        result = FolderCrawler.load_crawled_data(empty_df, ItemType.FILES, SavedCrawls.ROOT, SavedCrawls.EXTENSION)
+        result = self.fc.load_crawled_data(empty_df, ItemType.FILES, SavedCrawls.ROOT, SavedCrawls.EXTENSION)
 
         # Clean up the test environment
         test_helper.delete_test_paths()
@@ -216,35 +215,40 @@ class FolderCrawlerTestsLoadCrawledData(unittest.TestCase):
         pd.testing.assert_frame_equal(result, expected_df)
 
     def test_load_crawled_data_with_non_empty_container(self):
-        result = FolderCrawler.load_crawled_data(TEST_DATAFRAME, ItemType.FILES, SavedCrawls.ROOT,
-                                                 SavedCrawls.EXTENSION)
+        result = self.fc.load_crawled_data(TEST_DATAFRAME, ItemType.FILES, SavedCrawls.ROOT, SavedCrawls.EXTENSION)
         pd.testing.assert_frame_equal(result, TEST_DATAFRAME)
 
 
 class FolderCrawlerTestsGetCrawlSummary(unittest.TestCase):
+
+    def setUp(self):
+        self.fc = FolderCrawler(path=CURRENT_DIRECTORY)
+
     def test_summary_with_total_size(self):
-        result = FolderCrawler._get_crawl_summary(True, Messages.NR_OF_CRAWLED_DATA, ColoredBytes.ONE_KB_READABLE,
-                                                  ColoredBytes.ONE_KB_RAW)
+        result = self.fc._get_crawl_summary(True, Messages.NR_OF_CRAWLED_DATA,
+                                            ColoredBytes.ONE_KB_READABLE, ColoredBytes.ONE_KB_RAW)
         expected_summary = (Messages.NR_OF_CRAWLED_DATA, ColoredBytes.ONE_KB_READABLE, ColoredBytes.ONE_KB_RAW, "\n\n")
         self.assertEqual(result, expected_summary)
 
     def test_summary_without_total_size(self):
-        result = FolderCrawler._get_crawl_summary(False, Messages.NR_OF_CRAWLED_DATA, ColoredBytes.ONE_KB_READABLE,
-                                                  ColoredBytes.ONE_KB_RAW)
+        result = self.fc._get_crawl_summary(False, Messages.NR_OF_CRAWLED_DATA,
+                                            ColoredBytes.ONE_KB_READABLE, ColoredBytes.ONE_KB_RAW)
         expected_summary = ("\n",)
         self.assertEqual(result, expected_summary)
 
 
 class FolderCrawlerTestsFilterData(unittest.TestCase):
+
     def setUp(self):
         self.fc = FolderCrawler(path=CURRENT_DIRECTORY)
+        self.EMPTY_DICT = {COLUMN_NAMES[0]: [], COLUMN_NAMES[1]: []}
 
     def test_filter_data_with_nan_values(self):
         files = pd.DataFrame({COLUMN_NAMES[0]: ['file1', 'file2'], COLUMN_NAMES[1]: ['change1', NONE]})
         folders = pd.DataFrame({COLUMN_NAMES[0]: ['folder1', 'folder2'], COLUMN_NAMES[1]: ['change1', NONE]})
-        empty_dataframe = {COLUMN_NAMES[0]: [], COLUMN_NAMES[1]: []}
-        column = COLUMN_NAMES[1]
-        files, folders, skipped = self.fc._filter_data(files, folders, empty_dataframe, column)
+
+        files, folders, skipped = self.fc._filter_data(files, folders, self.EMPTY_DICT, COLUMN_NAMES[1])
+
         self.assertEqual(len(files), 1)
         self.assertEqual(len(folders), 1)
         self.assertEqual(len(skipped), 2)
@@ -252,9 +256,9 @@ class FolderCrawlerTestsFilterData(unittest.TestCase):
     def test_filter_data_without_nan_values(self):
         files = pd.DataFrame({COLUMN_NAMES[0]: ['file1', 'file2'], COLUMN_NAMES[1]: ['change1', 'change2']})
         folders = pd.DataFrame({COLUMN_NAMES[0]: ['folder1', 'folder2'], COLUMN_NAMES[1]: ['change1', 'change2']})
-        empty_dataframe = {COLUMN_NAMES[0]: [], COLUMN_NAMES[1]: []}
-        column = COLUMN_NAMES[1]
-        files, folders, skipped = self.fc._filter_data(files, folders, empty_dataframe, column)
+
+        files, folders, skipped = self.fc._filter_data(files, folders, self.EMPTY_DICT, COLUMN_NAMES[1])
+
         self.assertEqual(len(files), 2)
         self.assertEqual(len(folders), 2)
         self.assertEqual(len(skipped), 0)
@@ -263,24 +267,22 @@ class FolderCrawlerTestsFilterData(unittest.TestCase):
 class FolderCrawlerTestsGetCrawledData(unittest.TestCase):
     def setUp(self):
         self.folder_crawler = FolderCrawler(path=CURRENT_DIRECTORY)
+        self.unprocessedDataframe = pd.DataFrame([(('path1', 'change1', 'size1', 'bytes1'), True),
+                                                  (('path2', 'change2', 'size2', 'bytes2'), False)])
 
+    # do not put @staticmethod decorator here, else the test will not work
     def test_get_crawled_data_with_folder(self):
-        data = [(('path1', 'change1', 'size1', 'bytes1'), True),
-                (('path2', 'change2', 'size2', 'bytes2'), False)]
-        df = pd.DataFrame(data)
-        result = FolderCrawler._get_crawled_data(df, True)
-        expected = pd.DataFrame({COLUMN_NAMES[0]: ['path1'], 'Changed': ['change1'],
-                                 'Size readable': ['size1'], 'Size bytes': ['bytes1']})
+        result = FolderCrawler._get_crawled_data(self.unprocessedDataframe, is_folder=True)
+        expected = pd.DataFrame({COLUMN_NAMES[0]: ['path1'], COLUMN_NAMES[1]: ['change1'],
+                                 COLUMN_NAMES[2]: ['size1'], COLUMN_NAMES[3]: ['bytes1']})
 
         pd.testing.assert_frame_equal(result.reset_index(), expected.reset_index())
 
+    # do not put @staticmethod decorator here, else the test will not work
     def test_get_crawled_data_with_file(self):
-        data = [(('path2', 'change2', 'size2', 'bytes2'), False),
-                (('path3', 'change3', 'size3', 'bytes3'), True)]
-        df = pd.DataFrame(data)
-        result = FolderCrawler._get_crawled_data(df, False)
-        expected = pd.DataFrame({COLUMN_NAMES[0]: ['path2'], 'Changed': ['change2'],
-                                 'Size readable': ['size2'], 'Size bytes': ['bytes2']})
+        result = FolderCrawler._get_crawled_data(self.unprocessedDataframe, is_folder=False)
+        expected = pd.DataFrame({COLUMN_NAMES[0]: ['path2'], COLUMN_NAMES[1]: ['change2'],
+                                 COLUMN_NAMES[2]: ['size2'], COLUMN_NAMES[3]: ['bytes2']})
         pd.testing.assert_frame_equal(result, expected)
 
 
@@ -292,9 +294,9 @@ class FolderCrawlerTestsCrawlShallow(unittest.TestCase):
         os.mkdir(TEMP_DIR)
         result = self.fc._crawl_shallow(TEMP_DIR)
         os.rmdir(TEMP_DIR)
-        NR_OF_FOUND_ITEMS_EXPECTED = 0
+        nr_of_found_items_expected = 0
 
-        self.assertEqual(len(result), NR_OF_FOUND_ITEMS_EXPECTED)
+        self.assertEqual(len(result), nr_of_found_items_expected)
 
     def test_shallow_crawl_with_one_subdirectory(self):
         # Prepare the test environment
@@ -309,8 +311,8 @@ class FolderCrawlerTestsCrawlShallow(unittest.TestCase):
         test_helper.delete_test_paths()
 
         # Evaluate
-        NR_OF_FOUND_ITEMS_EXPECTED = 1
-        self.assertEqual(len(result), NR_OF_FOUND_ITEMS_EXPECTED)
+        nr_of_found_items_expected = 1
+        self.assertEqual(len(result), nr_of_found_items_expected)
 
     def test_shallow_crawl_with_multiple_subdirectories(self):
         # Prepare the test environment
@@ -326,8 +328,8 @@ class FolderCrawlerTestsCrawlShallow(unittest.TestCase):
         test_helper.delete_test_paths()
 
         # Evaluate
-        NR_OF_FOUND_ITEMS_EXPECTED = 2
-        self.assertEqual(len(result), NR_OF_FOUND_ITEMS_EXPECTED)
+        nr_of_found_items_expected = 2
+        self.assertEqual(len(result), nr_of_found_items_expected)
 
     def test_shallow_crawl_with_no_subdirectories_and_files(self):
         # Prepare the test environment
@@ -342,8 +344,8 @@ class FolderCrawlerTestsCrawlShallow(unittest.TestCase):
         test_helper.delete_test_paths()
 
         # Evaluate
-        NR_OF_FOUND_ITEMS_EXPECTED = 1
-        self.assertEqual(len(result), NR_OF_FOUND_ITEMS_EXPECTED)
+        nr_of_found_items_expected = 1
+        self.assertEqual(len(result), nr_of_found_items_expected)
 
     def test_shallow_crawl_with_one_subdirectory_and_files(self):
         # Prepare the test environment
@@ -359,8 +361,8 @@ class FolderCrawlerTestsCrawlShallow(unittest.TestCase):
         test_helper.delete_test_paths()
 
         # Evaluate
-        NR_OF_FOUND_ITEMS_EXPECTED = 1
-        self.assertEqual(len(result), NR_OF_FOUND_ITEMS_EXPECTED)
+        nr_of_found_items_expected = 1
+        self.assertEqual(len(result), nr_of_found_items_expected)
 
     def test_shallow_crawl_with_multiple_subdirectories_and_files(self):
         # Prepare the test environment
@@ -378,8 +380,8 @@ class FolderCrawlerTestsCrawlShallow(unittest.TestCase):
         test_helper.delete_test_paths()
 
         # Evaluate
-        NR_OF_FOUND_ITEMS_EXPECTED = 2
-        self.assertEqual(len(result), NR_OF_FOUND_ITEMS_EXPECTED)
+        nr_of_found_items_expected = 2
+        self.assertEqual(len(result), nr_of_found_items_expected)
 
     def test_shallow_crawl_with_multiple_subdirectories_and_files_2(self):
         # Prepare the test environment
@@ -397,8 +399,8 @@ class FolderCrawlerTestsCrawlShallow(unittest.TestCase):
         test_helper.delete_test_paths()
 
         # Evaluate
-        NR_OF_FOUND_ITEMS_EXPECTED = 4
-        self.assertEqual(len(result), NR_OF_FOUND_ITEMS_EXPECTED)
+        nr_of_found_items_expected = 4
+        self.assertEqual(len(result), nr_of_found_items_expected)
 
 
 class FolderCrawlerTestsCrawlDeep(unittest.TestCase):
@@ -409,8 +411,8 @@ class FolderCrawlerTestsCrawlDeep(unittest.TestCase):
         os.mkdir(TEMP_DIR)
         result = self.fc._crawl_deep(TEMP_DIR)
         os.rmdir(TEMP_DIR)
-        NR_OF_FOUND_ITEMS_EXPECTED = 0
-        self.assertEqual(len(result), NR_OF_FOUND_ITEMS_EXPECTED)
+        nr_of_found_items_expected = 0
+        self.assertEqual(len(result), nr_of_found_items_expected)
 
     def test_crawl_deep_with_one_subdirectory(self):
         # Prepare the test environment
@@ -424,8 +426,8 @@ class FolderCrawlerTestsCrawlDeep(unittest.TestCase):
         test_helper.delete_test_paths()
 
         # Evaluate
-        NR_OF_FOUND_ITEMS_EXPECTED = 1
-        self.assertEqual(len(result), NR_OF_FOUND_ITEMS_EXPECTED)
+        nr_of_found_items_expected = 1
+        self.assertEqual(len(result), nr_of_found_items_expected)
 
     def test_crawl_deep_with_multiple_subdirectories(self):
         # Prepare the test environment
@@ -441,8 +443,8 @@ class FolderCrawlerTestsCrawlDeep(unittest.TestCase):
         test_helper.delete_test_paths()
 
         # Evaluate
-        NR_OF_FOUND_ITEMS_EXPECTED = 2
-        self.assertEqual(len(result), NR_OF_FOUND_ITEMS_EXPECTED)
+        nr_of_found_items_expected = 2
+        self.assertEqual(len(result), nr_of_found_items_expected)
 
     def test_crawl_deep_with_no_subdirectories_and_files(self):
         # Prepare the test environment
@@ -457,8 +459,8 @@ class FolderCrawlerTestsCrawlDeep(unittest.TestCase):
         test_helper.delete_test_paths()
 
         # Evaluate
-        NR_OF_FOUND_ITEMS_EXPECTED = 1
-        self.assertEqual(len(result), NR_OF_FOUND_ITEMS_EXPECTED)
+        nr_of_found_items_expected = 1
+        self.assertEqual(len(result), nr_of_found_items_expected)
 
     def test_crawl_deep_with_one_subdirectory_and_files(self):
         # Prepare the test environment
@@ -474,8 +476,8 @@ class FolderCrawlerTestsCrawlDeep(unittest.TestCase):
         test_helper.delete_test_paths()
 
         # Evaluate
-        NR_OF_FOUND_ITEMS_EXPECTED = 2
-        self.assertEqual(len(result), NR_OF_FOUND_ITEMS_EXPECTED)
+        nr_of_found_items_expected = 2
+        self.assertEqual(len(result), nr_of_found_items_expected)
 
     def test_crawl_deep_with_multiple_subdirectories_and_files(self):
         # Prepare the test environment
@@ -493,8 +495,8 @@ class FolderCrawlerTestsCrawlDeep(unittest.TestCase):
         test_helper.delete_test_paths()
 
         # Evaluate
-        NR_OF_FOUND_ITEMS_EXPECTED = 4
-        self.assertEqual(len(result), NR_OF_FOUND_ITEMS_EXPECTED)
+        nr_of_found_items_expected = 4
+        self.assertEqual(len(result), nr_of_found_items_expected)
 
 
 class FolderCrawlerTestsSaveCrawlResults(unittest.TestCase):
@@ -536,8 +538,8 @@ class FolderCrawlerTestsGetSizeOfItem(unittest.TestCase):
         test_helper.delete_test_paths()
 
         # Evaluate
-        SIZE_OF_FILE_EXPECTED = 37
-        self.assertEqual(result, SIZE_OF_FILE_EXPECTED)
+        size_of_file_expected = 37
+        self.assertEqual(result, size_of_file_expected)
 
     def test_size_of_non_existing_file(self):
         result = self.fc._get_size_of_item(NOT_EXISTING_FILE, get_size_folder=False)
@@ -555,8 +557,8 @@ class FolderCrawlerTestsGetSizeOfItem(unittest.TestCase):
         test_helper.delete_test_paths()
 
         # Evaluate
-        SIZE_OF_FOLDER_EXPECTED = 37
-        self.assertEqual(result, SIZE_OF_FOLDER_EXPECTED)
+        size_of_folder_expected = 37
+        self.assertEqual(result, size_of_folder_expected)
 
 
 class FolderCrawlerTestsTabulateData(unittest.TestCase):
@@ -564,7 +566,6 @@ class FolderCrawlerTestsTabulateData(unittest.TestCase):
         self.fc = FolderCrawler(path=CURRENT_DIRECTORY)
 
     def test_tabulate_data_with_empty_dataframe(self):
-        EMPTY_DATAFRAME = pd.DataFrame()
         result = self.fc._tabulate_data(EMPTY_DATAFRAME)
         expected = tabulate(EMPTY_DATAFRAME, headers=TABLE_HEADER, tablefmt=TABLE_FORMAT)
         self.assertEqual(result, expected)
@@ -612,13 +613,13 @@ class FolderCrawlerTestsFilterSubdirectories(unittest.TestCase):
         result = self.fc._filter_subdirectories(df, COLUMN_NAMES[0])
 
         # Evaluate
-        NUMBER_OF_PATHS_EXPECTED = 3
-        self.assertEqual(len(result), NUMBER_OF_PATHS_EXPECTED)
+        number_of_paths_expected = 3
+        self.assertEqual(len(result), number_of_paths_expected)
 
     def test_filter_subdirectories_with_subdirectories(self):
         result = self.fc._filter_subdirectories(TEST_DATAFRAME, COLUMN_NAMES[0])
-        NUMBER_OF_PATHS_EXPECTED = 1
-        self.assertEqual(len(result), NUMBER_OF_PATHS_EXPECTED)
+        number_of_paths_expected = 1
+        self.assertEqual(len(result), number_of_paths_expected)
 
     def test_filter_subdirectories_with_mixed_paths(self):
         # Prepare the test environment
@@ -630,8 +631,8 @@ class FolderCrawlerTestsFilterSubdirectories(unittest.TestCase):
         result = self.fc._filter_subdirectories(df, COLUMN_NAMES[0])
 
         # Evaluate
-        NUMBER_OF_PATHS_EXPECTED = 2
-        self.assertEqual(len(result), NUMBER_OF_PATHS_EXPECTED)
+        number_of_paths_expected = 2
+        self.assertEqual(len(result), number_of_paths_expected)
 
 
 class FolderCrawlerTestsGetTimePerformance(unittest.TestCase):
