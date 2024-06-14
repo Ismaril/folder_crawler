@@ -29,6 +29,7 @@ class Messages:
     SAVING_RESULTS = "Saving into csv file:"
     DATAFRAME_PREPARATION = "Preparing dataframes."
     STARTING_MULTI_PROCESSING = "Starting multi-processing pool. The crawling starts now."
+    SEPARATOR = "-"*120
 
 
 @dataclass

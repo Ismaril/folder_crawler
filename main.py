@@ -12,8 +12,6 @@ from cmd_args import command_line_arguments_parser, resolve_default_values
 # 3. In "folder_crawler.py", put the result of the above method at last position into "data_complete" tuple in method
 #  "_get_path_with_properties".
 
-# todo: check documentation
-# todo: check that private methods do each only one thing. Isolate as much outside elements as possible.
 if __name__ == '__main__':
     ####################################################################################################################
     # COMMAND LINE USAGE
@@ -35,11 +33,17 @@ if __name__ == '__main__':
     # )
     ####################################################################################################################
     # NORMAL USAGE WITHIN THE IDE
-    cr = FolderCrawler(path=r"C:\\Users\lazni\Downloads")
+    cr = FolderCrawler(path=r"C:\\Users\\lazni\\Downloads")
     cr.main(
         crawl=True,
-        crawl_deep=False,
-        print_files=True,
-        print_folders=True,
-        print_skipped_items=True,
+        crawl_deep=True,
+        print_files=False,
+        print_folders=False,
+        print_skipped_items=False,
     )
+
+    # todo: put this into main
+    # cr.read_content_of_one_file(r"C:\Users\lazni\Downloads\test.txt", filter_file_content="1")
+    cr.read_content_of_multiple_files(filter_path_name=".txt", filter_file_content="1")
+
+    # todo: for filtering of strings, implement regex or use like for filter in (filter1, filter2, filter3)...

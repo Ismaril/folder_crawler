@@ -160,7 +160,9 @@ class FolderCrawler:
         item_path = os.path.join(self.path, path) if self.path not in path else path
         last_change = self._get_last_change_of_item(item_path)
         size = self._get_size_of_item(item_path, get_size_folder=is_folder)
-        size_readable, size_total = self._convert_bytes_to_readable_format(size, ColorFormatting.COLORS, ColorFormatting.UNITS, Style.RESET_ALL, function=self._color_format_string)
+        size_readable, size_total = self._convert_bytes_to_readable_format(size, ColorFormatting.COLORS,
+                                                                           ColorFormatting.UNITS, Style.RESET_ALL,
+                                                                           function=self._color_format_string)
         data_complete = (item_path, last_change, size_readable, size_total)
 
         return data_complete, is_folder
@@ -277,7 +279,6 @@ class FolderCrawler:
             filter_ = numbers <= filter_size
 
         return container.loc[filter_]
-
 
     @staticmethod
     def _filter_last_change(container: pd.DataFrame, filter_date: datetime.datetime,
@@ -626,31 +627,68 @@ class FolderCrawler:
 
     # endregion
 
-    # region implement later
-    # todo: implement later, work in progress
-    def read_content_of_file(self, path: str, filter_: str = "", print_=True):
+    # region Work in progress
+    # todo: work in progress, refactor, create tests, call this from main
+    @staticmethod
+    def read_content_of_one_file(path: str, filter_file_content: str = "", print_=True):
         """
         This function reads the content of a file and prints the lines that contain the filter string.
 
         :param path: The path of the file that needs to be read.
-        :param filter_: Filter string that filters out the lines.
+        :param filter_file_content: Filter string that filters out the lines in a given file.
+        :param print_: Boolean value that determines whether to print the lines or just return.
         :return: None
         """
 
-        array_ = []
-
+        file_lines_that_passed_filter = []
         with open(path, FileOps.READ_MODE, encoding=FileOps.ENCODING) as file:
             for line in file:
-                if filter_ in line:
+                if filter_file_content in line:
                     if print_:
                         print(line.strip())
-                    array_.append(line.strip())
+                    file_lines_that_passed_filter.append(line.strip())
+        return file_lines_that_passed_filter
 
-        return array_
+    def read_content_of_multiple_files(self, filter_path_name="", filter_file_content="", print_=True):
+        """
+        This function reads the content of multiple files and prints the lines that contain the filter string.
+        Try to run this function on as few files as possible, because you can get a lot of data into console.
+
+        :param filter_path_name: Filter string that filters out array of file paths.
+        :param filter_file_content: Filter string that filters out the lines in each file that passes the filter 'filter_path_name'.
+        :param print_: Boolean value that determines whether to print the lines.
+        """
+        paths_to_read_out = []
+        file_contents_from_all_filtered_paths = []
+
+        # Get relevant paths
+        for path in self.files[COLUMN_NAMES[0]]:
+            if filter_path_name in path:
+                paths_to_read_out.append(path)
+
+        # Read out the content of the files
+        for path in paths_to_read_out:
+            content_of_one_file = self.read_content_of_one_file(path, filter_file_content, print_=False)
+            file_contents_from_all_filtered_paths.append(content_of_one_file)
+
+            # Optionally print the content of the files
+            if print_:
+                for line in content_of_one_file:
+                    print(line)
+                print(Messages.SEPARATOR)
+
+        return file_contents_from_all_filtered_paths
 
     def compare_saved_crawls(self, path1: str, path2: str, print_=True):
-        set1 = set(self.read_content_of_file(path1, print_=False))
-        set2 = set(self.read_content_of_file(path2, print_=False))
+        """
+        This method compares two saved crawls and prints the differences.
+
+        :param path1: The path of the first saved crawl.
+        :param path2: The path of the second saved crawl.
+        :param print_: Boolean value that determines whether to print the differences or just return.
+        """
+        set1 = set(self.read_content_of_one_file(path1, print_=False))
+        set2 = set(self.read_content_of_one_file(path2, print_=False))
 
         array_difference = list(set1.symmetric_difference(set2))
 
