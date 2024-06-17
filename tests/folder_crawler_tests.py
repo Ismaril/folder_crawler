@@ -18,6 +18,7 @@ TEMP_FILE_1 = "temp_file1.txt"
 TEMP_FILE_2 = "temp_file2.txt"
 TEST_TEXT = "This is a temporary file for testing."
 NOT_EXISTING_FILE = 'non_existing_file.txt'
+NOT_EXISTING_FOLDER = 'non_existing_folder'
 CURRENT_DIRECTORY = "."
 
 TEST_DATAFRAME = pd.DataFrame({
@@ -81,6 +82,13 @@ class FolderCrawlerTestsMain(unittest.TestCase):
         self.assertEqual(folder_path_result, os.path.join(TEMP_DIR, SUB_DIR_1))
         self.assertEqual(folder_size_raw_result, ColoredBytes.THIRTYSEVEN_BYTES_RAW)
         self.assertTrue(self.fc.skipped.empty)
+
+    def test_main_non_existing_path(self):
+        self.fc.path = NOT_EXISTING_FOLDER
+
+        # Run test and evaluate at the same time.
+        with self.assertRaises(FileNotFoundError):
+            self.fc.main()
 
 
 class FolderCrawlerTestsGetPathWithProperties(unittest.TestCase):

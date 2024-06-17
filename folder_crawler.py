@@ -58,8 +58,8 @@ class FolderCrawler:
     # endregion
 
     def main(self, print_folders=True, print_files=True, print_skipped_items=True,
-             crawl=True, crawl_deep=True, filter_path="", filter_size=0, filter_size_sign=">=",
-             filter_date=datetime.datetime.min, filter_date_sign=">="):
+             crawl=True, crawl_deep=True, read_out_file_contents=False, filter_path="", filter_file_content="", filter_size=0,
+             filter_size_sign=">=", filter_date=datetime.datetime.min, filter_date_sign=">="):
         """
         This method is the main entry point into the FolderCrawler.
 
@@ -73,6 +73,8 @@ class FolderCrawler:
         :param filter_date_sign: A string value that is used together with parameter filter_date.
         :param crawl_deep: A boolean value that determines whether to go deep into subdirectories or not.
         :param crawl: A boolean value that determines whether to crawl or not.
+        :param read_out_file_contents: A boolean value that determines whether to read out lines from all files.
+        :param filter_file_content: A string value that is used to filter the lines in files.
         """
 
         # INITIALIZE THE STORAGE FOR CRAWLING RESULTS
@@ -94,6 +96,9 @@ class FolderCrawler:
         # PRINT DATAFRAMES
         self.print_dataframes(print_folders, print_files, print_skipped_items, filter_path, filter_size,
                               filter_size_sign, filter_date, filter_date_sign, crawl_deep)
+
+        if read_out_file_contents:
+            self.read_content_of_multiple_files(filter_path, filter_file_content)
 
         # PRINT TIME PERFORMANCE
         time_performance = self.get_time_performance(self.timer)
@@ -175,6 +180,10 @@ class FolderCrawler:
         :param path: The path of the folder that needs to be crawled.
         :param go_deep: A boolean value that determines whether to go deep into subdirectories or not.
         """
+
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Path '{path}' does not exist.")
+
         if go_deep:
             print(self._get_current_time(), Messages.DEEP_CRAWL)
             paths = self._crawl_deep(path)
@@ -208,6 +217,7 @@ class FolderCrawler:
         path_sizes = self._get_ints_from_str_dataframe_column(container, COLUMN_NAMES[3])
         container = self._global_dataframe_filter(container, filter_date, filter_date_sign, filter_path,
                                                   filter_size, filter_size_sign, item_type, path_sizes)
+        container = container.reset_index(drop=True)
 
         print(item_type.upper())
         # self._tabulate_data(container[SWITCHED_COLUMN_NAMES])
@@ -243,6 +253,7 @@ class FolderCrawler:
         if item_type in (ItemType.FILES, ItemType.FOLDERS):
             container = self._filter_sizes(container, filter_size, filter_size_sign, path_sizes)
             container = self._filter_last_change(container, filter_date, filter_date_sign, COLUMN_NAMES[1])
+
 
         return container
 
@@ -293,6 +304,8 @@ class FolderCrawler:
         """
 
         filter_ = object  # I just put it here because at return it does not see the filter_ variable
+
+        container[column] = container[column].apply(pd.to_datetime).copy()
 
         if sign == ">=":
             filter_ = container[column] >= filter_date
@@ -630,12 +643,12 @@ class FolderCrawler:
     # region Work in progress
     # todo: work in progress, refactor, create tests, call this from main
     @staticmethod
-    def read_content_of_one_file(path: str, filter_file_content: str = "", print_=True):
+    def _read_content_of_one_file(path: str, filter_file_content: str = "", print_=True):
         """
         This function reads the content of a file and prints the lines that contain the filter string.
 
         :param path: The path of the file that needs to be read.
-        :param filter_file_content: Filter string that filters out the lines in a given file.
+        :param filter_file_content: Lines that match this filter will pass next.
         :param print_: Boolean value that determines whether to print the lines or just return.
         :return: None
         """
@@ -649,30 +662,24 @@ class FolderCrawler:
                     file_lines_that_passed_filter.append(line.strip())
         return file_lines_that_passed_filter
 
-    def read_content_of_multiple_files(self, filter_path_name="", filter_file_content="", print_=True):
+    def read_content_of_multiple_files(self, filter_path="", filter_file_content=""):
         """
         This function reads the content of multiple files and prints the lines that contain the filter string.
         Try to run this function on as few files as possible, because you can get a lot of data into console.
 
-        :param filter_path_name: Filter string that filters out array of file paths.
+        :param filter_path: Paths that match this filter will pass next.
         :param filter_file_content: Filter string that filters out the lines in each file that passes the filter 'filter_path_name'.
-        :param print_: Boolean value that determines whether to print the lines.
         """
-        paths_to_read_out = []
+        print(Messages.READING_CONTENT_OF_FILES)
+
         file_contents_from_all_filtered_paths = []
-
-        # Get relevant paths
-        for path in self.files[COLUMN_NAMES[0]]:
-            if filter_path_name in path:
-                paths_to_read_out.append(path)
-
         # Read out the content of the files
-        for path in paths_to_read_out:
-            content_of_one_file = self.read_content_of_one_file(path, filter_file_content, print_=False)
-            file_contents_from_all_filtered_paths.append(content_of_one_file)
+        for path in self.files[COLUMN_NAMES[0]]:
+            if filter_path in path:
+                content_of_one_file = self._read_content_of_one_file(path, filter_file_content, print_=False)
+                file_contents_from_all_filtered_paths.append(content_of_one_file)
 
-            # Optionally print the content of the files
-            if print_:
+                # Optionally print the content of the files
                 for line in content_of_one_file:
                     print(line)
                 print(Messages.SEPARATOR)
@@ -687,8 +694,8 @@ class FolderCrawler:
         :param path2: The path of the second saved crawl.
         :param print_: Boolean value that determines whether to print the differences or just return.
         """
-        set1 = set(self.read_content_of_one_file(path1, print_=False))
-        set2 = set(self.read_content_of_one_file(path2, print_=False))
+        set1 = set(self._read_content_of_one_file(path1, print_=False))
+        set2 = set(self._read_content_of_one_file(path2, print_=False))
 
         array_difference = list(set1.symmetric_difference(set2))
 
