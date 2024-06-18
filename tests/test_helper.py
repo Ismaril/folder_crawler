@@ -39,9 +39,10 @@ class TestHelper:
         """
 
         assert self.assert_text_files(*texts_to_write, use_the_same_text=use_the_same_text), \
-            (f"Number of text files does not match the number of text messages in TestHelper. "
-             f"To fix this, the number of text messages must be equal to the number of text files, "
-             f"if 'use_the_same_text' parameter is False.")
+            (f"Number of text files does not match the number of text messages in TestHelper.\n"
+             f"To fix this, the number of text messages must be equal to the number of text files,\n"
+             f"if 'use_the_same_text' parameter is False.\n"
+             f"Number of text files: {len(self.paths)}, number of text messages: {len(texts_to_write)}.")
 
         text_to_write_index = 0
         for path in self.paths:

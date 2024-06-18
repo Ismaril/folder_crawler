@@ -1,5 +1,6 @@
 from folder_crawler import FolderCrawler
 from cmd_args import command_line_arguments_parser, resolve_default_values
+from structures import SavedCrawls
 
 # PERFORMANCE (JUST FOR REFERENCE):
 # With multiprocessing implemented in this code, you can crawl bunch of data.
@@ -31,19 +32,24 @@ if __name__ == '__main__':
     #     filter_date=default_values[3],
     #     filter_date_sign=default_values[4],
     # )
+
     ####################################################################################################################
     # NORMAL USAGE WITHIN THE IDE
-    cr = FolderCrawler(path=r"C:\\Users\\lazni\\Downloads")
+    cr = FolderCrawler(path=r"C:\\")
     cr.main(
         crawl=True,
-        crawl_deep=True,
-        print_files=False,
-        print_folders=False,
-        print_skipped_items=False,
+        crawl_deep=False,
+        print_files=True,
+        print_folders=True,
+        print_skipped_items=True,
+        filter_path="",
+        filter_size=1024**3,
+        filter_size_sign=">=",
+        filter_date="1900",
+        filter_date_sign=">=",
+        read_out_file_contents=False,
+        filter_file_content=""
     )
 
-    # todo: put this into main
-    # cr.read_content_of_one_file(r"C:\Users\lazni\Downloads\test.txt", filter_file_content="1")
-    cr.read_content_of_multiple_files(filter_path_name=".txt", filter_file_content="1")
-
-    # todo: for filtering of strings, implement regex or use like for filter in (filter1, filter2, filter3)...
+    # This is the only public method except the main method which you can use.
+    # cr.compare_saved_crawls(SavedCrawls.FILES, path2=r"saved_crawls\second_file_with_crawled_data.txt")

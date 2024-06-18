@@ -17,7 +17,9 @@ SUB_DIR_2 = "sub_dir2"
 TEMP_FILE_1 = "temp_file1.txt"
 TEMP_FILE_2 = "temp_file2.txt"
 TEST_TEXT = "This is a temporary file for testing."
+TEST_TEXT_2 = "This is a temporary file for testing.2"
 NOT_EXISTING_FILE = 'non_existing_file.txt'
+NOT_EXISTING_FILE_CONTENT = 'non_existing_file_content'
 NOT_EXISTING_FOLDER = 'non_existing_folder'
 CURRENT_DIRECTORY = "."
 
@@ -651,14 +653,14 @@ class FolderCrawlerTestsGetTimePerformance(unittest.TestCase):
         TIME = 0.1
         start_time = time.perf_counter()
         time.sleep(TIME)
-        time_result = self.fc.get_time_performance(start_time)
+        time_result = self.fc._get_time_performance(start_time)
         time_expected = TIME
 
         self.assertGreater(time_result, time_expected)
 
     def test_time_performance_returns_zero_for_same_time(self):
         start_time = time.perf_counter()
-        time_result = self.fc.get_time_performance(start_time).__floor__()
+        time_result = self.fc._get_time_performance(start_time).__floor__()
         time_expected = 0
 
         self.assertEqual(time_result, time_expected)
@@ -845,8 +847,8 @@ class TestFolderCrawlerInitializeStorage(unittest.TestCase):
 
     def test_initialize_files_creates_directories_and_files(self):
         # Run test
-        self.fc.initialize_storage(SavedCrawls.ROOT,
-                                   *(SavedCrawls.FILES, SavedCrawls.FOLDERS, SavedCrawls.SKIPPED))
+        self.fc._initialize_storage(SavedCrawls.ROOT,
+                                    *(SavedCrawls.FILES, SavedCrawls.FOLDERS, SavedCrawls.SKIPPED))
 
         # Evaluate
         self.assertTrue(os.path.exists(SavedCrawls.ROOT))
@@ -859,6 +861,146 @@ class TestFolderCrawlerInitializeStorage(unittest.TestCase):
             os.remove(file)
         os.rmdir(SavedCrawls.ROOT)
 
+
+class TestFolderCrawlerReadContentOfOneFile(unittest.TestCase):
+
+    def setUp(self):
+        self.fc = FolderCrawler(path=CURRENT_DIRECTORY)
+
+    def test_read_content_of_one_file_one_line(self):
+        # Prepare the test environment
+        test_helper = TestHelper(TEMP_FILE_1)
+        test_helper.create_test_paths(TEST_TEXT)
+
+        # Run test
+        result = self.fc._read_content_of_one_file(TEMP_FILE_1)
+
+        # Clean up the test environment
+        test_helper.delete_test_paths()
+
+        # Evaluate
+        self.assertEqual(result[0], TEST_TEXT)
+
+    def test_read_content_of_one_file_one_line_matches_filter(self):
+        # Prepare the test environment
+        test_helper = TestHelper(TEMP_FILE_1)
+        test_helper.create_test_paths(TEST_TEXT)
+
+        # Run test
+        result = self.fc._read_content_of_one_file(TEMP_FILE_1, filter_file_content=TEST_TEXT)
+
+        # Clean up the test environment
+        test_helper.delete_test_paths()
+
+        # Evaluate
+        self.assertEqual(result[0], TEST_TEXT)
+
+    def test_read_content_of_one_file_one_line_does_not_match_filter(self):
+        # Prepare the test environment
+        test_helper = TestHelper(TEMP_FILE_1)
+        test_helper.create_test_paths(TEST_TEXT)
+
+        # Run test
+        result = self.fc._read_content_of_one_file(TEMP_FILE_1, filter_file_content=NOT_EXISTING_FILE_CONTENT)
+
+        # Clean up the test environment
+        test_helper.delete_test_paths()
+
+        # Evaluate
+        empty_list = []
+        self.assertListEqual(result, empty_list)
+
+    def test_read_content_of_one_file_multiple_lines(self):
+        # Prepare the test environment
+        test_helper = TestHelper(TEMP_FILE_1)
+        test_helper.create_test_paths(TEST_TEXT + "\n" + TEST_TEXT + "\n" + TEST_TEXT)
+
+        # Run test
+        result = self.fc._read_content_of_one_file(TEMP_FILE_1)
+
+        # Clean up the test environment
+        test_helper.delete_test_paths()
+
+        # Evaluate
+        self.assertEqual(result[0], TEST_TEXT)
+        self.assertEqual(result[1], TEST_TEXT)
+        self.assertEqual(result[2], TEST_TEXT)
+
+    def test_read_content_of_one_file_multiple_lines_matches_filter(self):
+        # Prepare the test environment
+        test_helper = TestHelper(TEMP_FILE_1)
+        test_helper.create_test_paths(TEST_TEXT + "\n" + TEST_TEXT + "\n" + TEST_TEXT)
+
+        # Run test
+        result = self.fc._read_content_of_one_file(TEMP_FILE_1, filter_file_content=TEST_TEXT)
+
+        # Clean up the test environment
+        test_helper.delete_test_paths()
+
+        # Evaluate
+        self.assertEqual(result[0], TEST_TEXT)
+        self.assertEqual(result[1], TEST_TEXT)
+        self.assertEqual(result[2], TEST_TEXT)
+
+    def test_read_content_of_one_file_multiple_lines_does_not_match_filter(self):
+        # Prepare the test environment
+        test_helper = TestHelper(TEMP_FILE_1)
+        test_helper.create_test_paths(TEST_TEXT + "\n" + TEST_TEXT + "\n" + TEST_TEXT)
+
+        # Run test
+        result = self.fc._read_content_of_one_file(TEMP_FILE_1, filter_file_content=NOT_EXISTING_FILE_CONTENT)
+
+        # Clean up the test environment
+        test_helper.delete_test_paths()
+
+        # Evaluate
+        self.assertListEqual(result, [])
+
+
+class TestFolderCrawlerReadContentOfMultipleFiles(unittest.TestCase):
+
+    def setUp(self):
+        self.fc = FolderCrawler(path=CURRENT_DIRECTORY)
+
+    def test_read_content_of_multiple_files_one_file_one_line(self):
+        # Prepare the test environment
+        test_helper = TestHelper(TEMP_FILE_1)
+        test_helper.create_test_paths(TEST_TEXT)
+
+        # Run test
+        self.fc.files = pd.DataFrame({COLUMN_NAMES[0]: [TEMP_FILE_1]})
+        result = self.fc._read_content_of_multiple_files()
+
+        # Clean up the test environment
+        test_helper.delete_test_paths()
+
+        # Evaluate
+        self.assertEqual(result[0][0], TEST_TEXT)
+
+    def test_read_content_of_multiple_files_multiple_files_multiple_lines(self):
+        # Prepare the test environment
+        test_helper = TestHelper(TEMP_FILE_1, TEMP_FILE_2)
+        test_helper.create_test_paths(TEST_TEXT + "\n" + TEST_TEXT + "\n" + TEST_TEXT)
+
+        # Run test
+        self.fc.files = pd.DataFrame({COLUMN_NAMES[0]: [TEMP_FILE_1, TEMP_FILE_2]})
+        result = self.fc._read_content_of_multiple_files()
+
+        # Clean up the test environment
+        test_helper.delete_test_paths()
+
+        # Evaluate
+        file1 = result[0]
+        file2 = result[1]
+        self.assertEqual(file1[0], TEST_TEXT)  # line 0
+        self.assertEqual(file1[1], TEST_TEXT)  # line 1
+        self.assertEqual(file1[2], TEST_TEXT)  # line 2
+        self.assertRaises(IndexError, lambda: file1[3])  # line 3
+
+        self.assertEqual(file2[0], TEST_TEXT)
+        self.assertEqual(file2[1], TEST_TEXT)
+        self.assertEqual(file2[2], TEST_TEXT)
+        self.assertRaises(IndexError, lambda: file2[3])
 
 # endregion
 
