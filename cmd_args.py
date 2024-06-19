@@ -4,7 +4,7 @@ from datetime import datetime
 
 def command_line_arguments_parser():
     """
-    Parse arguments which are passed from the command line.
+    Parse arguments which are passed from the command line or powershell.
     """
     parser = argparse.ArgumentParser(description="Python argument parser from command line")
 
@@ -26,7 +26,10 @@ def command_line_arguments_parser():
 
 def resolve_default_values(cmd_args) -> tuple:
     """
-    Resolve default values for the filters.
+    Resolve default values for the filters. These values are taken from the command line arguments and transformed
+    into pythonic values.
+
+    :param cmd_args: Command line arguments.
     """
     fpath = "" if cmd_args.fpath is None else cmd_args.fpath
     fsize = 0 if cmd_args.fsize is None else cmd_args.fsize

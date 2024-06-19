@@ -57,6 +57,7 @@ class FolderCrawler:
 
     # endregion
 
+    # region Public Methods
     def main(self,
              crawl=True, crawl_deep=True,
              print_files=True, print_folders=True, print_skipped_items=True,
@@ -106,8 +107,38 @@ class FolderCrawler:
 
         # PRINT TIME PERFORMANCE
         time_performance = self._get_time_performance(self.timer)
-        print("\n" + Messages.WHOLE_PROCES_TOOK, self._format_timestamp(time_performance))
+        print("\n" + Messages.WHOLE_PROCES_TOOK, self._format_timestamp(time_performance), end="\n\n")
 
+    # TODO: compare_saved_crawls - Perhaps perform the crawling and comparison of both locations in one method,
+    #  fully automatically?
+    def compare_saved_crawls(self, path1: str, path2: str, print_=True):
+        """
+        This method compares two saved crawls and prints the differences. To operate this method correctly,
+        perform one crawl and rename the file which hold the results. Then perform another crawl in different location.
+        Once you have two saved crawls, you can compare them with this method.
+
+        :param path1: The path of the first saved crawl.
+        :param path2: The path of the second saved crawl.
+        :param print_: Boolean value that determines whether to print the differences or just return.
+        """
+        df1 = pd.read_csv(path1)
+        df2 = pd.read_csv(path2)
+
+        # Concatenate the two DataFrames
+        concatenated = pd.concat([df1, df2], ignore_index=True)
+
+        # Drop duplicates that exist in both DataFrames
+        symmetric_difference = concatenated.drop_duplicates(keep=False)
+
+        if print_:
+            tabular_format = self._tabulate_data(symmetric_difference)
+            print(tabular_format)
+
+        return symmetric_difference
+
+    # endregion
+
+    # region Private OOP Methods
     def _prepare_dataframes(self, dataframe):
         """
         This high-level wrapper method is used to prepare the crawled data into the dataframes.
@@ -263,7 +294,35 @@ class FolderCrawler:
 
         return container
 
-    # region Static Methods
+    def _read_content_of_multiple_files(self, filter_path="", filter_file_content=""):
+        """
+        This function reads the content of multiple files and prints the lines that contain the filter string.
+        Try to run this function on as few files as possible, because you can get a lot of data into console.
+        There is no check for a type of file, therefore try to read only files which contain text. Examples of
+        allowed files .txt, .py, ...
+
+        :param filter_path: Paths that match this filter will pass next.
+        :param filter_file_content: Filter string that filters out the lines in each file that passes the filter 'filter_path_name'.
+        """
+        print(Messages.READING_CONTENT_OF_FILES)
+
+        file_contents_from_all_filtered_paths = []
+        # Read out the content of the files
+        for path in self.files[COLUMN_NAMES[0]]:
+            if filter_path in path:
+                content_of_one_file = self._read_content_of_one_file(path, filter_file_content, print_=False)
+                file_contents_from_all_filtered_paths.append(content_of_one_file)
+
+                # Optionally print the content of the files
+                for line in content_of_one_file:
+                    print(line)
+                print(Messages.SEPARATOR)
+
+        return file_contents_from_all_filtered_paths
+
+    # endregion
+
+    # region Private Static Methods
     @staticmethod
     def _filter_paths(container: pd.DataFrame, filter_path: str, column: str) -> pd.DataFrame:
         """
@@ -644,10 +703,6 @@ class FolderCrawler:
             # Create empty files if they don't exist or just append empty string if they do exist
             open(file, FileOps.APPEND_MODE, encoding=FileOps.ENCODING).close()
 
-    # endregion
-
-    # region Work in progress
-    # todo: work in progress, refactor, create tests, call this from main
     @staticmethod
     def _read_content_of_one_file(path: str, filter_file_content: str = "", print_=True):
         """
@@ -668,55 +723,4 @@ class FolderCrawler:
                     file_lines_that_passed_filter.append(line.strip())
         return file_lines_that_passed_filter
 
-    def _read_content_of_multiple_files(self, filter_path="", filter_file_content=""):
-        """
-        This function reads the content of multiple files and prints the lines that contain the filter string.
-        Try to run this function on as few files as possible, because you can get a lot of data into console.
-        There is no check for a type of file, therefore try to read only files which contain text. Examples of
-        allowed files .txt, .py, ...
-
-        :param filter_path: Paths that match this filter will pass next.
-        :param filter_file_content: Filter string that filters out the lines in each file that passes the filter 'filter_path_name'.
-        """
-        print(Messages.READING_CONTENT_OF_FILES)
-
-        file_contents_from_all_filtered_paths = []
-        # Read out the content of the files
-        for path in self.files[COLUMN_NAMES[0]]:
-            if filter_path in path:
-                content_of_one_file = self._read_content_of_one_file(path, filter_file_content, print_=False)
-                file_contents_from_all_filtered_paths.append(content_of_one_file)
-
-                # Optionally print the content of the files
-                for line in content_of_one_file:
-                    print(line)
-                print(Messages.SEPARATOR)
-
-        return file_contents_from_all_filtered_paths
-
-    # TODO: Perhaps perform the crawling and comparison of both locations in one method, fully automatically?
-    def compare_saved_crawls(self, path1: str, path2: str, print_=True):
-        """
-        This method compares two saved crawls and prints the differences. To operate this method correctly,
-        perform one crawl and rename the file which hold the results. Then perform another crawl in different location.
-        Once you have two saved crawls, you can compare them with this method.
-
-        :param path1: The path of the first saved crawl.
-        :param path2: The path of the second saved crawl.
-        :param print_: Boolean value that determines whether to print the differences or just return.
-        """
-        df1 = pd.read_csv(path1)
-        df2 = pd.read_csv(path2)
-
-        # Concatenate the two DataFrames
-        concatenated = pd.concat([df1, df2], ignore_index=True)
-
-        # Drop duplicates that exist in both DataFrames
-        symmetric_difference = concatenated.drop_duplicates(keep=False)
-
-        if print_:
-            tabular_format = self._tabulate_data(symmetric_difference)
-            print(tabular_format)
-
-        return symmetric_difference
     # endregion
