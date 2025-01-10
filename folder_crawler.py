@@ -13,6 +13,7 @@ from colorama import init, Fore, Back, Style
 NONE = np.nan
 
 COLUMN_NAMES = ["Path", "Changed", "Size readable", "Size bytes"]
+ALLOWED_FILE_EXTENSIONS = (".txt", ".py") # If you want to add more, check which can be opened with current implementation.
 
 # TODO: You can switch the column names if you want to have a different order in the table.
 #  Just look with ctrl+f for "SWITCHED_COLUMN_NAMES" and uncomment the line. Comment then the original one.
@@ -304,19 +305,32 @@ class FolderCrawler:
         :param filter_path: Paths that match this filter will pass next.
         :param filter_file_content: Filter string that filters out the lines in each file that passes the filter 'filter_path_name'.
         """
+        if self.files.isna == True:
+            print("There are no files to read out.")
+            return
+
         print(Messages.READING_CONTENT_OF_FILES)
 
         file_contents_from_all_filtered_paths = []
+
         # Read out the content of the files
         for path in self.files[COLUMN_NAMES[0]]:
-            if filter_path in path:
-                content_of_one_file = self._read_content_of_one_file(path, filter_file_content, print_=False)
-                file_contents_from_all_filtered_paths.append(content_of_one_file)
+            if filter_path in path and path.endswith(ALLOWED_FILE_EXTENSIONS):
+                try:
+                    content_of_one_file = self._read_content_of_one_file(path, filter_file_content, print_=False)
+                    file_contents_from_all_filtered_paths.append(content_of_one_file)
 
-                # Optionally print the content of the files
-                for line in content_of_one_file:
-                    print(line)
-                print(Messages.SEPARATOR)
+                    # Optionally print the content of the files
+                    for i, line in enumerate(content_of_one_file):
+                        if not i:
+                            print(path)
+                        print(f"Row {i}", line, sep=": ")
+                    if content_of_one_file:
+                        print(Messages.SEPARATOR)
+                except UnicodeDecodeError:
+                    print(f"File at '{path}' is not readable with encoding '{FileOps.ENCODING}'. Skipping this file.")
+                    print(Messages.SEPARATOR)
+                    continue
 
         return file_contents_from_all_filtered_paths
 
