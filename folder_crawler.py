@@ -315,7 +315,8 @@ class FolderCrawler:
 
         # Read out the content of the files
         for path in self.files[COLUMN_NAMES[0]]:
-            if filter_path in path and path.endswith(ALLOWED_FILE_EXTENSIONS):
+            path = path.lower()
+            if filter_path.lower() in path and path.endswith(ALLOWED_FILE_EXTENSIONS):
                 try:
                     content_of_one_file = self._read_content_of_one_file(path, filter_file_content, print_=False)
                     file_contents_from_all_filtered_paths.append(content_of_one_file)
@@ -347,7 +348,8 @@ class FolderCrawler:
         :param column: The column in which a filter is used to filter the dataframe.
         """
 
-        filter_ = container[column].str.contains(filter_path)
+        column_with_lower_chars = container[column].str.lower()
+        filter_ = column_with_lower_chars.apply(lambda x: filter_path.lower() in x)
         return container[filter_]
 
     @staticmethod
@@ -731,7 +733,7 @@ class FolderCrawler:
         file_lines_that_passed_filter = []
         with open(path, FileOps.READ_MODE, encoding=FileOps.ENCODING) as file:
             for line in file:
-                if filter_file_content in line:
+                if filter_file_content.lower() in line.lower():
                     if print_:
                         print(line.strip())
                     file_lines_that_passed_filter.append(line.strip())
