@@ -1,5 +1,6 @@
 import datetime
 import os
+import shutil
 import time
 import pandas as pd
 import numpy as np
@@ -112,7 +113,14 @@ class FolderCrawler:
 
     # TODO: compare_saved_crawls - Perhaps perform the crawling and comparison of both locations in one method,
     #  fully automatically?
-    def compare_saved_crawls(self, path1: str, path2: str, print_=True):
+    # TODO: Method needs refactoring.
+    def compare_saved_crawls(
+            self,
+            path1: str,
+            path2: str,
+            print_=True,
+            symmetric_difference=True,
+            copy_difs_to_folder=False):
         """
         This method compares two saved crawls and prints the differences. To operate this method correctly,
         perform one crawl and rename the file which hold the results. Then perform another crawl in different location.
@@ -121,21 +129,67 @@ class FolderCrawler:
         :param path1: The path of the first saved crawl.
         :param path2: The path of the second saved crawl.
         :param print_: Boolean value that determines whether to print the differences or just return.
+        :param symmetric_difference: Boolean value that determines whether to perform symmetric difference or one sided
+            comparison.
+        :param copy_difs_to_folder: Boolean value that determines whether to copy the differences into a folder.
         """
         df1 = pd.read_csv(path1)
         df2 = pd.read_csv(path2)
+        # TODO: Put column names into variables.
+        df1["File Name"] = df1["Path"].apply(lambda x: os.path.basename(x))
+        df2["File Name"] = df2["Path"].apply(lambda x: os.path.basename(x))
 
-        # Concatenate the two DataFrames
-        concatenated = pd.concat([df1, df2], ignore_index=True)
+        filtered: pd.DataFrame = pd.DataFrame()
 
-        # Drop duplicates that exist in both DataFrames
-        symmetric_difference = concatenated.drop_duplicates(keep=False)
+        # Symmetric difference. List only items that are different in both DataFrames
+        if symmetric_difference:
+            # Concatenate the two DataFrames
+            concatenated = pd.concat([df1, df2], ignore_index=True)
+
+            # # Add column which holds only the file names extracted from the Path column
+            # TODO: verify why I commented this out. I think it is needed.
+            # concatenated["File Name"] = concatenated["Path"].apply(lambda x: os.path.basename(x))
+
+            # Drop duplicates that exist in both DataFrames
+            symmetric_difference = concatenated.drop_duplicates(subset=["Changed", "File Name"], keep=False)
+
+            # If there exist files with the same file name but one of them is newer, drop the older
+            filtered = symmetric_difference.sort_values("Changed").drop_duplicates(subset=["File Name"], keep="last")
+
+        # One-sided difference. List only items that are missing in df2 compared to df1
+        else:
+            cols = ["File Name", "Changed"]  # columns that define uniqueness
+            merged = df1.merge(df2[cols], on=cols, how="left", indicator=True)
+            filtered = merged[merged["_merge"] == "left_only"].drop(columns="_merge")
+
 
         if print_:
-            tabular_format = self._tabulate_data(symmetric_difference)
+            tabular_format = self._tabulate_data(filtered)
             print(tabular_format)
 
-        return symmetric_difference
+        if copy_difs_to_folder:
+            diff_folder = "saved_crawls/differences"
+
+            # Remove previous differences folder if it exists
+            if os.path.exists(diff_folder):
+                number_of_previous_files = len(os.listdir(diff_folder))
+                for file in os.listdir(diff_folder):
+                    file_path = os.path.join(diff_folder, file)
+                    if os.path.isfile(file_path):
+                        os.remove(file_path)
+                print(f"\nRemoved previous contents of '{diff_folder}'. Files removed: {number_of_previous_files}",
+                      end="\n\n")
+
+            if not os.path.exists(diff_folder):
+                os.mkdir(diff_folder)
+
+            for path, file_name in zip(filtered["Path"], filtered["File Name"]):
+                # copy file from A to B
+                shutil.copy(path, os.path.join(diff_folder, file_name))
+                print(f"Copied '{file_name}' to '{diff_folder}'")
+            print(f"\nNumber of files copied to '{diff_folder}': {len(filtered)}")
+
+        return filtered
 
     # endregion
 

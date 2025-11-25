@@ -38,24 +38,31 @@ if __name__ == '__main__':
 
     ####################################################################################################################
     # NORMAL USAGE WITHIN THE IDE
-    cr = FolderCrawler(path=r"C:\Users\lazni\Desktop")
+    cr = FolderCrawler(path=r"C:\\")
     cr.main(
         crawl=True,
-        crawl_deep=True,
-        print_files=False,
-        print_folders=False,
+        crawl_deep=False,
+        print_files=True,
+        print_folders=True,
         print_skipped_items=True,
-        filter_path="",
-        filter_size=0,
-        filter_size_sign=">=",
-        filter_date="1900",
-        filter_date_sign=">=",
-        read_out_file_contents=True,  # Not implemented in command line arguments.
-        filter_file_content="xxx"  # Not implemented in command line arguments.
+        # filter_path="project",
+        # filter_size=0,
+        # filter_size_sign=">=",
+        # filter_date="1900",
+        # filter_date_sign=">=",
+        # read_out_file_contents=False,  # Not implemented in command line arguments.
+        # filter_file_content="YourFilterToPickUpDesiredLine/s"  # Not implemented in command line arguments.
     )
-    #
+
+    # todo: I did some quick adjustments of the following method, therefore if you gonna use it in the future, make sure it is working on some small two test folders first.
     # This is the only public method except the main method which you can use.
-    # cr.compare_saved_crawls(SavedCrawls.FILES, path2=r"saved_crawls\second_file_with_crawled_data.txt")
+    # cr.compare_saved_crawls(path1=r"saved_crawls\filesYourFirstCrawl.txt",
+    #                         path2=r"saved_crawls\filesYourSecondCrawl.txt",
+    #                         copy_difs_to_folder=True,
+    #                         symmetric_difference=False)
+
+    # console readline
+
 
     ####################################################################################################################
     # TODO: Long output of single line which is printed into console results into not much readable format of the printed table as a whole.
