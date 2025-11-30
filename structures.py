@@ -16,6 +16,8 @@ class SavedCrawls:
     ROOT = "saved_crawls"
     EXTENSION = ".txt"
     FILES = os.path.join(ROOT, f"{ItemType.FILES}{EXTENSION}")
+    FILES_TEMP_1 = os.path.join(ROOT, f"{ItemType.FILES}1{EXTENSION}")
+    FILES_TEMP_2 = os.path.join(ROOT, f"{ItemType.FILES}2{EXTENSION}")
     FOLDERS = os.path.join(ROOT, f"{ItemType.FOLDERS}{EXTENSION}")
     SKIPPED = os.path.join(ROOT, f"{ItemType.SKIPPED}{EXTENSION}")
 

@@ -48,7 +48,7 @@ class FolderCrawlerTestsMain(unittest.TestCase):
         test_helper.create_test_paths(TEST_TEXT)
 
         # Run test
-        self.fc.main()
+        self.fc.crawl_folders()
         path_result = self.fc.files[COLUMN_NAMES[0]][0]
         size_raw_result = self.fc.files[COLUMN_NAMES[3]][0]
 
@@ -68,7 +68,7 @@ class FolderCrawlerTestsMain(unittest.TestCase):
         test_helper.create_test_paths(TEST_TEXT)
 
         # Run test
-        self.fc.main()
+        self.fc.crawl_folders()
         file_path_result = self.fc.files[COLUMN_NAMES[0]][0]
         file_size_raw_result = self.fc.files[COLUMN_NAMES[3]][0]
         folder_path_result = self.fc.folders[COLUMN_NAMES[0]][0]
@@ -90,7 +90,7 @@ class FolderCrawlerTestsMain(unittest.TestCase):
 
         # Run test and evaluate at the same time.
         with self.assertRaises(FileNotFoundError):
-            self.fc.main()
+            self.fc.crawl_folders()
 
 
 class FolderCrawlerTestsGetPathWithProperties(unittest.TestCase):

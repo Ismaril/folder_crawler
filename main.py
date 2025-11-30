@@ -38,21 +38,22 @@ if __name__ == '__main__':
 
     ####################################################################################################################
     # NORMAL USAGE WITHIN THE IDE
-    cr = FolderCrawler(path=r"C:\\")
-    cr.main(
-        crawl=True,
-        crawl_deep=False,
-        print_files=True,
-        print_folders=True,
-        print_skipped_items=True,
-        # filter_path="project",
-        # filter_size=0,
-        # filter_size_sign=">=",
-        # filter_date="1900",
-        # filter_date_sign=">=",
-        # read_out_file_contents=False,  # Not implemented in command line arguments.
-        # filter_file_content="YourFilterToPickUpDesiredLine/s"  # Not implemented in command line arguments.
-    )
+    cr = FolderCrawler(path=r"C:\Users\lazni\Desktop\AA", path2=r"C:\Users\lazni\Desktop\BB")
+    cr.main__()
+    # cr.crawl_folders(
+    #     crawl=True,
+    #     crawl_deep=False,
+    #     print_files=True,
+    #     print_folders=True,
+    #     print_skipped_items=True,
+    #     # filter_path="project",
+    #     # filter_size=0,
+    #     # filter_size_sign=">=",
+    #     # filter_date="1900",
+    #     # filter_date_sign=">=",
+    #     # read_out_file_contents=False,  # Not implemented in command line arguments.
+    #     # filter_file_content="YourFilterToPickUpDesiredLine/s"  # Not implemented in command line arguments.
+    # )
 
     # todo: I did some quick adjustments of the following method, therefore if you gonna use it in the future, make sure it is working on some small two test folders first.
     # This is the only public method except the main method which you can use.

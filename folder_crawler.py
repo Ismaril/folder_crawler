@@ -14,7 +14,8 @@ from colorama import init, Fore, Back, Style
 NONE = np.nan
 
 COLUMN_NAMES = ["Path", "Changed", "Size readable", "Size bytes"]
-ALLOWED_FILE_EXTENSIONS = (".txt", ".py") # If you want to add more, check which can be opened with current implementation.
+ALLOWED_FILE_EXTENSIONS = (".txt",
+                           ".py")  # If you want to add more, check which can be opened with current implementation.
 
 # TODO: You can switch the column names if you want to have a different order in the table.
 #  Just look with ctrl+f for "SWITCHED_COLUMN_NAMES" and uncomment the line. Comment then the original one.
@@ -38,7 +39,18 @@ class FolderCrawler:
     """
 
     # region Constructor
-    def __init__(self, path: str):
+    def __init__(self,
+                 path: str,
+                 path2: str = "",
+                 crawl=True, crawl_deep=True,
+                 print_files=True, print_folders=True, print_skipped_items=True,
+                 filter_path="",
+                 filter_size=0, filter_size_sign=">=",
+                 filter_date=datetime.datetime.min, filter_date_sign=">=",
+                 read_out_file_contents=False, filter_file_content="",
+                 symmetric_difference=True,
+                 copy_difs_to_folder=True
+                 ):
         """
         This is the constructor method for the FolderCrawler class.
 
@@ -46,7 +58,25 @@ class FolderCrawler:
         """
 
         self.path = path
+        self.path2 = path2
+        self.crawl = crawl
+        self.crawl_deep = crawl_deep
+        self.print_files = print_files
+        self.print_folders = print_folders
+        self.print_skipped_items = print_skipped_items
+        self.filter_path = filter_path
+        self.filter_size = filter_size
+        self.filter_size_sign = filter_size_sign
+        self.filter_date = filter_date
+        self.filter_date_sign = filter_date_sign
+        self.read_out_file_contents = read_out_file_contents
+        self.filter_file_content = filter_file_content
+        self.symmetric_difference = symmetric_difference
+        self.copy_difs_to_folder = copy_difs_to_folder
+
         self.timer = time.perf_counter()  # start the timer
+
+        self.crawl_folders_method_calls = 0
 
         # create a dataframe with column names, but no data
         self.files = pd.DataFrame(INITIAL_DATAFRAME)
@@ -60,13 +90,19 @@ class FolderCrawler:
     # endregion
 
     # region Public Methods
-    def main(self,
-             crawl=True, crawl_deep=True,
-             print_files=True, print_folders=True, print_skipped_items=True,
-             filter_path="",
-             filter_size=0, filter_size_sign=">=",
-             filter_date=datetime.datetime.min, filter_date_sign=">=",
-             read_out_file_contents=False, filter_file_content=""):
+    def main__(self):
+        for path in (self.path, self.path2):
+            if path:
+                self.crawl_folders(path)
+
+        self.file_content_operations(enable=self.read_out_file_contents)
+        self.compare_saved_crawls(self.symmetric_difference, self.copy_difs_to_folder)
+
+    def file_content_operations(self, enable: bool = False):
+        if enable:
+            self._read_content_of_multiple_files(self.filter_path, self.filter_file_content)
+
+    def crawl_folders(self, path_: str):
         """
         This method is the main entry point into the FolderCrawler.
 
@@ -87,38 +123,39 @@ class FolderCrawler:
         # INITIALIZE THE STORAGE FOR CRAWLING RESULTS
         self._initialize_storage(SavedCrawls.ROOT,
                                  *(SavedCrawls.FILES, SavedCrawls.FOLDERS, SavedCrawls.SKIPPED))
-        if crawl:
+        if self.crawl:
             # CRAWL
-            dataframe = self._crawl_items(self.path, crawl_deep)
+            dataframe = self._crawl_items(path_, self.crawl_deep)
 
             # PREPARE DATAFRAMES
             self._prepare_dataframes(dataframe)
 
             # SAVE DATAFRAMES
             self._save_dataframes()
+            self._make_temp_file_storages(self.path2)
 
         # LOAD DATAFRAMES
         self._load_dataframes()
 
         # PRINT DATAFRAMES
-        self._print_dataframes(print_folders, print_files, print_skipped_items, filter_path, filter_size,
-                               filter_size_sign, filter_date, filter_date_sign, crawl_deep)
+        self._print_dataframes(self.print_folders, self.print_files, self.print_skipped_items, self.filter_path,
+                               self.filter_size,
+                               self.filter_size_sign, self.filter_date, self.filter_date_sign, self.crawl_deep)
 
-        if read_out_file_contents:
-            self._read_content_of_multiple_files(filter_path, filter_file_content)
+        # if read_out_file_contents:
+        #     self._read_content_of_multiple_files(filter_path, filter_file_content)
 
         # PRINT TIME PERFORMANCE
         time_performance = self._get_time_performance(self.timer)
         print("\n" + Messages.WHOLE_PROCES_TOOK, self._format_timestamp(time_performance), end="\n\n")
+
+        self.crawl_folders_method_calls += 1
 
     # TODO: compare_saved_crawls - Perhaps perform the crawling and comparison of both locations in one method,
     #  fully automatically?
     # TODO: Method needs refactoring.
     def compare_saved_crawls(
             self,
-            path1: str,
-            path2: str,
-            print_=True,
             symmetric_difference=True,
             copy_difs_to_folder=False):
         """
@@ -133,11 +170,19 @@ class FolderCrawler:
             comparison.
         :param copy_difs_to_folder: Boolean value that determines whether to copy the differences into a folder.
         """
-        df1 = pd.read_csv(path1)
-        df2 = pd.read_csv(path2)
-        # TODO: Put column names into variables.
-        df1["File Name"] = df1["Path"].apply(lambda x: os.path.basename(x))
-        df2["File Name"] = df2["Path"].apply(lambda x: os.path.basename(x))
+
+        if not self.path2:
+            return
+
+        # Add two columns to the dataframe that will help us with comparison of saved crawls.
+        FILE_NAME_COLUMN = "File Name"
+        PATH_COLUMN = "Path"
+
+        # todo: dodat file names
+        df1 = pd.read_csv(SavedCrawls.FILES_TEMP_1)
+        df2 = pd.read_csv(SavedCrawls.FILES_TEMP_2)
+        df1[FILE_NAME_COLUMN] = df1[PATH_COLUMN].apply(lambda x: os.path.basename(x))
+        df2[FILE_NAME_COLUMN] = df2[PATH_COLUMN].apply(lambda x: os.path.basename(x))
 
         filtered: pd.DataFrame = pd.DataFrame()
 
@@ -148,7 +193,7 @@ class FolderCrawler:
 
             # # Add column which holds only the file names extracted from the Path column
             # TODO: verify why I commented this out. I think it is needed.
-            # concatenated["File Name"] = concatenated["Path"].apply(lambda x: os.path.basename(x))
+            concatenated["File Name"] = concatenated["Path"].apply(lambda x: os.path.basename(x))
 
             # Drop duplicates that exist in both DataFrames
             symmetric_difference = concatenated.drop_duplicates(subset=["Changed", "File Name"], keep=False)
@@ -162,8 +207,7 @@ class FolderCrawler:
             merged = df1.merge(df2[cols], on=cols, how="left", indicator=True)
             filtered = merged[merged["_merge"] == "left_only"].drop(columns="_merge")
 
-
-        if print_:
+        if self.print_files:
             tabular_format = self._tabulate_data(filtered)
             print(tabular_format)
 
@@ -194,6 +238,19 @@ class FolderCrawler:
     # endregion
 
     # region Private OOP Methods
+    def _check_how_many_roots_to_crawl(self, path2: str) -> int:
+        if not path2:
+            return 1
+        else:
+            return 2
+
+    def _make_temp_file_storages(self, path2: str):
+        if path2:
+            if self.crawl_folders_method_calls == 0:
+                shutil.copy(SavedCrawls.FILES, SavedCrawls.FILES_TEMP_1)
+            elif self.crawl_folders_method_calls == 1:
+                shutil.copy(SavedCrawls.FILES, SavedCrawls.FILES_TEMP_2)
+
     def _prepare_dataframes(self, dataframe):
         """
         This high-level wrapper method is used to prepare the crawled data into the dataframes.
@@ -360,7 +417,7 @@ class FolderCrawler:
         :param filter_file_content: Filter string that filters out the lines in each file that passes the filter 'filter_path_name'.
         """
         if self.files.isna == True:
-            print("There are no files to read out.")
+            print("There are no files to read out. You need to have filled the self.files dataframe.")
             return
 
         print(Messages.READING_CONTENT_OF_FILES)
