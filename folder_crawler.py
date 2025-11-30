@@ -6,20 +6,22 @@ import pandas as pd
 import numpy as np
 
 from tabulate import tabulate
-from structures import ItemType, SavedCrawls, Messages, FileOps, ColorFormatting, ByteSize
+from structures import ItemType, SavedCrawls, Messages, FileOps, ColorFormatting, ByteSize, ColumnNames as CN
 from multiprocessing import Pool
 from colorama import init, Fore, Back, Style
 
 # region Constants
 NONE = np.nan
 
-COLUMN_NAMES = ["Path", "Changed", "Size readable", "Size bytes"]
+COLUMN_NAMES = [CN.PATH, CN.CHANGED, CN.SIZE_READABLE, CN.SIZE_BYTES]
+
+# If you want to add more, check which can be opened with the current implementation.
 ALLOWED_FILE_EXTENSIONS = (".txt",
-                           ".py")  # If you want to add more, check which can be opened with current implementation.
+                           ".py")
 
 # TODO: You can switch the column names if you want to have a different order in the table.
 #  Just look with ctrl+f for "SWITCHED_COLUMN_NAMES" and uncomment the line. Comment then the original one.
-SWITCHED_COLUMN_NAMES = ["Path", "Size bytes", "Size readable", "Changed"]
+# SWITCHED_COLUMN_NAMES = ["Path", "Size bytes", "Size readable", "Changed"]
 
 INITIAL_DATAFRAME = {
     COLUMN_NAMES[0]: [],
@@ -35,7 +37,8 @@ TABLE_FORMAT = "psql"
 
 class FolderCrawler:
     """
-    The FolderCrawler class is used to crawl through a folder and its sub-folders and prints the paths with its properties.
+    The FolderCrawler class is used to crawl through a folder and its subfolders and prints the paths with its
+    properties.
     """
 
     # region Constructor
@@ -47,14 +50,26 @@ class FolderCrawler:
                  filter_path="",
                  filter_size=0, filter_size_sign=">=",
                  filter_date=datetime.datetime.min, filter_date_sign=">=",
-                 read_out_file_contents=False, filter_file_content="",
+                 read_out_file_contents=True, filter_file_content="",
                  symmetric_difference=True,
-                 copy_difs_to_folder=True
+                 copy_diffs_to_folder=True
                  ):
         """
-        This is the constructor method for the FolderCrawler class.
+        This is the constructor for the FolderCrawler class.
 
         :param path: The path of the folder that needs to be crawled.
+        :param crawl: A boolean value that determines whether to crawl or not.
+        :param crawl_deep: A boolean value that determines whether to crawl deep into subdirectories or not.
+        :param print_files: A boolean value that determines whether to print files that were found during the crawling.
+        :param print_folders: A boolean value that determines whether to print the folders that were found during the crawling.
+        :param print_skipped_items: A boolean value that determines whether to print the skipped items. (Exception occured extracting the file)
+        :param filter_path: A string value used to filter the file and folder paths. Only matching will pass.
+        :param filter_size: An integer value that is used to filter the files and folders based on their sizes.
+        :param filter_size_sign: A string value that is used together with parameter filter_size.
+        :param filter_date: A datetime value that is used to filter the files and folders based on their last change date.
+        :param filter_date_sign: A string value that is used together with parameter filter_date.
+        :param read_out_file_contents: A boolean value that determines whether to read out text lines from all files.
+        :param filter_file_content: A string value that is used to filter the text lines in files.
         """
 
         self.path = path
@@ -72,9 +87,10 @@ class FolderCrawler:
         self.read_out_file_contents = read_out_file_contents
         self.filter_file_content = filter_file_content
         self.symmetric_difference = symmetric_difference
-        self.copy_difs_to_folder = copy_difs_to_folder
+        self.copy_difs_to_folder = copy_diffs_to_folder
 
-        self.timer = time.perf_counter()  # start the timer
+        # start the timer for performance measurement
+        self.timer = time.perf_counter()
 
         self.crawl_folders_method_calls = 0
 
@@ -90,150 +106,123 @@ class FolderCrawler:
     # endregion
 
     # region Public Methods
-    def main__(self):
+    def main__(self) -> None:
         for path in (self.path, self.path2):
             if path:
                 self.crawl_folders(path)
 
         self.file_content_operations(enable=self.read_out_file_contents)
-        self.compare_saved_crawls(self.symmetric_difference, self.copy_difs_to_folder)
+        self.compare_saved_crawls()
 
-    def file_content_operations(self, enable: bool = False):
+    def file_content_operations(self, enable: bool = False) -> None:
         if enable:
             self._read_content_of_multiple_files(self.filter_path, self.filter_file_content)
 
-    def crawl_folders(self, path_: str):
+    def crawl_folders(self, path_: str) -> None:
         """
-        This method is the main entry point into the FolderCrawler.
+        This method is responsible for crawling the folders and printing the paths with its properties.
 
-        :param crawl: A boolean value that determines whether to crawl or not.
-        :param crawl_deep: A boolean value that determines whether to crawl deep into subdirectories or not.
-        :param print_files: A boolean value that determines whether to print files that were found during the crawling.
-        :param print_folders: A boolean value that determines whether to print the folders that were found during the crawling.
-        :param print_skipped_items: A boolean value that determines whether to print the skipped items. (Exception occured extracting the file)
-        :param filter_path: A string value that is used to filter the file and folder paths. Only matching will pass.
-        :param filter_size: An integer value that is used to filter the files and folders based on their sizes.
-        :param filter_size_sign: A string value that is used together with parameter filter_size.
-        :param filter_date: A datetime value that is used to filter the files and folders based on their last change date.
-        :param filter_date_sign: A string value that is used together with parameter filter_date.
-        :param read_out_file_contents: A boolean value that determines whether to read out text lines from all files.
-        :param filter_file_content: A string value that is used to filter the text lines in files.
+        :param path_: The path of the folder that needs to be crawled.
         """
 
-        # INITIALIZE THE STORAGE FOR CRAWLING RESULTS
+        # Prepare the storage for the crawled results.
         self._initialize_storage(SavedCrawls.ROOT,
                                  *(SavedCrawls.FILES, SavedCrawls.FOLDERS, SavedCrawls.SKIPPED))
         if self.crawl:
-            # CRAWL
+            # Crawl
             dataframe = self._crawl_items(path_, self.crawl_deep)
-
-            # PREPARE DATAFRAMES
+            # Prepare dataframes
             self._prepare_dataframes(dataframe)
-
-            # SAVE DATAFRAMES
+            # Save dataframes
             self._save_dataframes()
             self._make_temp_file_storages(self.path2)
 
-        # LOAD DATAFRAMES
         self._load_dataframes()
-
-        # PRINT DATAFRAMES
         self._print_dataframes(self.print_folders, self.print_files, self.print_skipped_items, self.filter_path,
                                self.filter_size,
                                self.filter_size_sign, self.filter_date, self.filter_date_sign, self.crawl_deep)
 
-        # if read_out_file_contents:
-        #     self._read_content_of_multiple_files(filter_path, filter_file_content)
-
-        # PRINT TIME PERFORMANCE
+        # Print time performance
         time_performance = self._get_time_performance(self.timer)
-        print("\n" + Messages.WHOLE_PROCES_TOOK, self._format_timestamp(time_performance), end="\n\n")
+        print(Messages.CRAWLING_TIME, self._format_timestamp(time_performance), end="\n\n")
 
+        # This variable helps to track how many times this method was called. This info is used later in code.
         self.crawl_folders_method_calls += 1
 
-    # TODO: compare_saved_crawls - Perhaps perform the crawling and comparison of both locations in one method,
-    #  fully automatically?
-    # TODO: Method needs refactoring.
-    def compare_saved_crawls(
-            self,
-            symmetric_difference=True,
-            copy_difs_to_folder=False):
+    def compare_saved_crawls(self):
         """
-        This method compares two saved crawls and prints the differences. To operate this method correctly,
-        perform one crawl and rename the file which hold the results. Then perform another crawl in different location.
-        Once you have two saved crawls, you can compare them with this method.
-
-        :param path1: The path of the first saved crawl.
-        :param path2: The path of the second saved crawl.
-        :param print_: Boolean value that determines whether to print the differences or just return.
-        :param symmetric_difference: Boolean value that determines whether to perform symmetric difference or one sided
-            comparison.
-        :param copy_difs_to_folder: Boolean value that determines whether to copy the differences into a folder.
+        This method compares crawled data from 2 root locations and prints the differences.
         """
 
+        # If the 2nd path, for the folder crawler, was not provided, we know that we have nothing to compare
+        # against. Therefore, this method makes no sense to execute.
         if not self.path2:
             return
 
-        # Add two columns to the dataframe that will help us with comparison of saved crawls.
-        FILE_NAME_COLUMN = "File Name"
-        PATH_COLUMN = "Path"
+        filtered = self._subtract_datasets()
 
-        # todo: dodat file names
+        if self.print_files:
+            print(self._tabulate_data(filtered))
+
+        self._copy_diffs_to_folder(filtered)
+
+        return filtered
+
+    def _subtract_datasets(self):
         df1 = pd.read_csv(SavedCrawls.FILES_TEMP_1)
         df2 = pd.read_csv(SavedCrawls.FILES_TEMP_2)
-        df1[FILE_NAME_COLUMN] = df1[PATH_COLUMN].apply(lambda x: os.path.basename(x))
-        df2[FILE_NAME_COLUMN] = df2[PATH_COLUMN].apply(lambda x: os.path.basename(x))
-
-        filtered: pd.DataFrame = pd.DataFrame()
-
+        # Extract just a file name from the complete path
+        df1[CN.FILE_NAME] = df1[CN.PATH].apply(lambda x: os.path.basename(x))
+        df2[CN.FILE_NAME] = df2[CN.PATH].apply(lambda x: os.path.basename(x))
+        subtracted: pd.DataFrame = pd.DataFrame()
         # Symmetric difference. List only items that are different in both DataFrames
-        if symmetric_difference:
-            # Concatenate the two DataFrames
-            concatenated = pd.concat([df1, df2], ignore_index=True)
-
-            # # Add column which holds only the file names extracted from the Path column
-            # TODO: verify why I commented this out. I think it is needed.
-            concatenated["File Name"] = concatenated["Path"].apply(lambda x: os.path.basename(x))
-
-            # Drop duplicates that exist in both DataFrames
-            symmetric_difference = concatenated.drop_duplicates(subset=["Changed", "File Name"], keep=False)
-
-            # If there exist files with the same file name but one of them is newer, drop the older
-            filtered = symmetric_difference.sort_values("Changed").drop_duplicates(subset=["File Name"], keep="last")
+        if self.symmetric_difference:
+            subtracted = self._symmetric_difference(df1, df2)  # , subtracted)
 
         # One-sided difference. List only items that are missing in df2 compared to df1
         else:
-            cols = ["File Name", "Changed"]  # columns that define uniqueness
-            merged = df1.merge(df2[cols], on=cols, how="left", indicator=True)
-            filtered = merged[merged["_merge"] == "left_only"].drop(columns="_merge")
+            subtracted = self._one_side_difference(df1, df2)
+        return subtracted
 
-        if self.print_files:
-            tabular_format = self._tabulate_data(filtered)
-            print(tabular_format)
+    @staticmethod
+    def _one_side_difference(df1: pd.DataFrame, df2: pd.DataFrame) -> pd.DataFrame:
+        cols = [CN.FILE_NAME, CN.CHANGED]  # columns that define uniqueness
+        merged = df1.merge(df2[cols], on=cols, how="left", indicator=True)
+        filtered = merged[merged["_merge"] == "left_only"].drop(columns="_merge")
+        return filtered
 
-        if copy_difs_to_folder:
-            diff_folder = "saved_crawls/differences"
+    @staticmethod
+    def _symmetric_difference(df1: pd.DataFrame, df2: pd.DataFrame) -> pd.DataFrame:
+        # Concatenate the two DataFrames
+        concatenated = pd.concat([df1, df2], ignore_index=True)
+        # Drop duplicates that exist in both DataFrames
+        symmetric_difference = concatenated.drop_duplicates(subset=[CN.CHANGED, CN.FILE_NAME], keep=False)
+        # If there exist files with the same file name but one of them is newer, drop the older
+        filtered = symmetric_difference.sort_values(CN.CHANGED).drop_duplicates(subset=[CN.FILE_NAME], keep="last")
+        return filtered
+
+    def _copy_diffs_to_folder(self, filtered: pd.DataFrame) -> None:
+        if self.copy_difs_to_folder:
+            DIFF_FOLDER = "saved_crawls/differences"
 
             # Remove previous differences folder if it exists
-            if os.path.exists(diff_folder):
-                number_of_previous_files = len(os.listdir(diff_folder))
-                for file in os.listdir(diff_folder):
-                    file_path = os.path.join(diff_folder, file)
+            if os.path.exists(DIFF_FOLDER):
+                number_of_previous_files = len(os.listdir(DIFF_FOLDER))
+                for file in os.listdir(DIFF_FOLDER):
+                    file_path = os.path.join(DIFF_FOLDER, file)
                     if os.path.isfile(file_path):
                         os.remove(file_path)
-                print(f"\nRemoved previous contents of '{diff_folder}'. Files removed: {number_of_previous_files}",
+                print(f"\nRemoved previous contents of '{DIFF_FOLDER}'. Files removed: {number_of_previous_files}",
                       end="\n\n")
 
-            if not os.path.exists(diff_folder):
-                os.mkdir(diff_folder)
+            if not os.path.exists(DIFF_FOLDER):
+                os.mkdir(DIFF_FOLDER)
 
-            for path, file_name in zip(filtered["Path"], filtered["File Name"]):
+            for path, file_name in zip(filtered[CN.PATH], filtered[CN.FILE_NAME]):
                 # copy file from A to B
-                shutil.copy(path, os.path.join(diff_folder, file_name))
-                print(f"Copied '{file_name}' to '{diff_folder}'")
-            print(f"\nNumber of files copied to '{diff_folder}': {len(filtered)}")
-
-        return filtered
+                shutil.copy(path, os.path.join(DIFF_FOLDER, file_name))
+                print(f"Copied '{file_name}' to '{DIFF_FOLDER}'")
+            print(f"\nNumber of files copied to '{DIFF_FOLDER}': {len(filtered)}")
 
     # endregion
 
@@ -370,7 +359,8 @@ class FolderCrawler:
                                                   filter_size, filter_size_sign, item_type, path_sizes)
         container = container.reset_index(drop=True)
         print(item_type.upper())
-        # self._tabulate_data(container[SWITCHED_COLUMN_NAMES])
+        # Uncomment if you want to have the table with switched columns
+        # print(self._tabulate_data(container[SWITCHED_COLUMN_NAMES]))
         print(self._tabulate_data(container))
         self._print_crawl_summary(crawl_deep, item_type, path_sizes)
 
@@ -443,6 +433,10 @@ class FolderCrawler:
                     print(f"File at '{path}' is not readable with encoding '{FileOps.ENCODING}'. Skipping this file.")
                     print(Messages.SEPARATOR)
                     continue
+            elif not path.endswith(ALLOWED_FILE_EXTENSIONS):
+                print(f"File type at path {path} is not enabled for reading.\n"
+                      f"Add it's extension to ALLOWED_FILE_EXTENSIONS: {ALLOWED_FILE_EXTENSIONS}.\n"
+                      f"Then verify if the program is able to read such file.")
 
         return file_contents_from_all_filtered_paths
 
@@ -545,7 +539,7 @@ class FolderCrawler:
         :param size_raw: The raw size that is printed.
         """
         if print_:
-            return message, size_readable, size_raw, "\n\n"
+            return message, size_readable, size_raw
         else:
             return "\n",
 

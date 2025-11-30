@@ -4,6 +4,15 @@ from colorama import Fore
 
 
 @dataclass
+class ColumnNames:
+    PATH = "Path"
+    CHANGED = "Changed"
+    SIZE_READABLE = "Size readable"
+    SIZE_BYTES = "Size bytes"
+    FILE_NAME = "File Name"
+
+
+@dataclass
 class ItemType:
     FILES = "files"
     FOLDERS = "folders"
@@ -26,13 +35,13 @@ class SavedCrawls:
 class Messages:
     DEEP_CRAWL = "Option chosen: DEEP CRAWL -> Going deep into sub-folders."
     SHALLOW_CRAWL = "Option chosen: SHALLOW CRAW -> Staying in the inputted folder."
-    WHOLE_PROCES_TOOK = "THE WHOLE PROCESS TOOK:"
+    CRAWLING_TIME = "THE CRAWLING PROCESS TOOK:"
     NR_OF_CRAWLED_DATA = "TOTAL CRAWLED DATA:"
     SAVING_RESULTS = "Saving into csv file:"
     DATAFRAME_PREPARATION = "Preparing dataframes."
     STARTING_MULTI_PROCESSING = "Starting multi-processing pool. The crawling starts now."
     READING_CONTENT_OF_FILES = "READING CONTENT OF FILES:"
-    SEPARATOR = "-"*120
+    SEPARATOR = "-" * 120
 
 
 @dataclass
